@@ -567,14 +567,18 @@ async function loadOffice() {
 
 /* ---------- Versjon: klienten laster på nytt ved ny deploy ---------- */
 
-async function hashPublicDir() {
+// Serveren er med i hashen, slik at hver deploy gir nye asset-URL-er. Da
+// kan ikke en URL som Cloudflare har cachet under en tidligere utrulling
+// henge igjen.
+async function hashSources() {
   const hash = createHash("sha256");
+  hash.update(await readFile(fileURLToPath(import.meta.url)));
   for (const name of (await readdir(PUBLIC_DIR)).sort()) {
     hash.update(name).update(await readFile(join(PUBLIC_DIR, name)));
   }
   return hash.digest("hex").slice(0, 12);
 }
-const VERSION = await hashPublicDir();
+const VERSION = await hashSources();
 
 /* ---------- HTTP ---------- */
 
@@ -635,7 +639,10 @@ async function serveStatic(pathname, res) {
     const cacheControl = isHtml ? "no-cache" : "public, max-age=31536000, immutable";
     send(res, 200, body, { "Content-Type": type, "Cache-Control": cacheControl });
   } catch {
-    send(res, 404, "Finnes ikke", { "Content-Type": "text/plain; charset=utf-8" });
+    // no-store: under en rullerende oppdatering kan den gamle containeren få
+    // spørsmål om filer som bare finnes i den nye. Cloudflare cachet en slik
+    // 404 i fire timer 2026-10-19; det skal ikke skje igjen.
+    send(res, 404, "Finnes ikke", { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
   }
 }
 

@@ -671,6 +671,26 @@ function tick() {
   }
 }
 
+// Feiler et bilde, stilark eller skript (typisk midt i en utrulling), lastes
+// siden på nytt etter et minutt, høyst tre ganger på rad.
+let assetFailed = false;
+function retryAfterAssetError() {
+  if (assetFailed) return;
+  assetFailed = true;
+  let tries = 0;
+  try { tries = Number(sessionStorage.getItem("jpc-asset-retries")) || 0; } catch {}
+  if (tries >= 3) return;
+  try { sessionStorage.setItem("jpc-asset-retries", String(tries + 1)); } catch {}
+  setTimeout(() => location.reload(), 60_000);
+}
+window.addEventListener("error", event => {
+  if (event.target instanceof HTMLElement && /^(IMG|SCRIPT|LINK)$/.test(event.target.tagName)) retryAfterAssetError();
+}, true);
+// Bildet kan ha feilet før dette skriptet kjørte.
+document.querySelectorAll("img").forEach(img => { if (img.complete && img.naturalWidth === 0) retryAfterAssetError(); });
+// Telleren nullstilles bare etter en innlasting uten feil.
+setTimeout(() => { if (!assetFailed) try { sessionStorage.removeItem("jpc-asset-retries"); } catch {} }, 5 * 60_000);
+
 window.addEventListener("resize", fitScreen);
 // Webfonten kan komme etter første måling; mål overskriftene på nytt da.
 document.fonts?.ready.then(fitNews);
