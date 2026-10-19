@@ -364,6 +364,8 @@ async function loadWeather() {
       text: symbol.text,
       wind: details.wind_speed ?? 0,
       gust: details.wind_speed_of_gust ?? null,
+      // Retningen vinden kommer fra, i grader. Værbakgrunnen blåser motsatt vei.
+      windDir: details.wind_from_direction ?? null,
       rain: nowFirst?.next_1_hours?.details?.precipitation_amount ?? fcFirst.next_1_hours?.details?.precipitation_amount ?? 0,
       day: isDaylight(Date.now()),
     },
@@ -378,13 +380,22 @@ async function loadWeather() {
 
 const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
 
+// Tagger fjernes med hensyn til anførselstegn, fordi attributtverdier kan
+// inneholde «>». Det skjer før entitetene dekodes: ITavisen har bildetekster
+// som «&lt;p&gt;…» inne i data-attributter på <img>, og dekodet først ble de
+// til ekte tagger som brøt <img> i stykker og lekket en lang URL ut i ingressen.
+// Etter dekodingen fjernes tagger én gang til, for strømmer som entitetskoder
+// HTML-en sin i stedet for å bruke CDATA.
+const TAG = /<(?:"[^"]*"|'[^']*'|[^'">])*>/g;
+
 function decodeXml(text) {
   return String(text || "")
     .replace(/^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/, "$1")
+    .replace(TAG, "")
     .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
     .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
     .replace(/&([a-z]+);/gi, (m, name) => ENTITIES[name.toLowerCase()] ?? m)
-    .replace(/<[^>]+>/g, "")
+    .replace(TAG, "")
     .trim();
 }
 

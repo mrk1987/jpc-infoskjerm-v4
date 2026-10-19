@@ -61,6 +61,30 @@ METs symbolkoder oversettes til WMO-kodene som ikonene bygger på, og til Yrs or
 regnbyger»). Soloppgang og solnedgang regnes ut lokalt (avviker høyst et par minutter fra METs
 sunrise-API).
 
+### Værbakgrunn
+
+Bak panelene går en dempet animasjon som speiler været ute (`public/ambient.js`, ett lerret):
+
+| Vær | Bakgrunn |
+|---|---|
+| Klart, dag | Varm solglød i hjørnet med stråler som dreier sakte |
+| Klart, natt | Stjerner som blinker svakt, og en myk måneglød |
+| Lettskyet, skyet | Myke skyer som driver forbi (mørkere når det regner) |
+| Tåke | Brede tåkebånd som glir og pulserer |
+| Regn, byger | Regnstriper, tettere jo kraftigere regnet er |
+| Sludd | Regn og snø blandet |
+| Snø | Snøfnugg som vugger ned |
+| Torden | Kraftig regn og et sjeldent, svakt lysglimt |
+| Vind (fra 8 m/s, eller kast fra ~13 m/s) | Vindstriper på tvers, i kombinasjon med alt over. Regnet faller skrått og snøen driver i vindens faktiske retning. |
+
+Er det regn på radaren akkurat nå, vises regn selv om timesymbolet sier skyet. Lynet holder seg
+godt under grensene for blinkende lys som kan utløse anfall, og med «redusert bevegelse» slått på
+i operativsystemet vises et stillbilde i stedet for animasjon.
+
+**Forhåndsvisning:** legg til `?vaer=` i adressen for å se et vær uten å vente på det, f.eks.
+`https://infoskjerm.kokkinos.no/?vaer=snø,vind`. Lag: `sol`, `natt`, `skyer`, `tåke`, `regn`,
+`sludd`, `snø`, `torden`, `vind`, kommaseparert.
+
 ### Kiosk-PC
 
 Skjermen drives av en Windows 11-PC med Edge eller Chrome i fullskjerm, ikke Flip-skjermens

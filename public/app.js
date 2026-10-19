@@ -33,6 +33,7 @@ function fitScreen() {
   const scale = Math.min(window.innerWidth / 1080, window.innerHeight / 1920);
   $("screen").style.transform = `translate(-50%, -50%) scale(${scale})`;
   currentScale = scale;
+  window.JpcAmbient?.resize(scale);
 }
 
 /* ---------- Henting med lokal reserve ---------- */
@@ -263,7 +264,80 @@ function renderWeather() {
   const now = Date.now();
   const series = hourly.filter(h => h.t >= now - 3_600_000).slice(0, 25);
   renderChart($("wx-chart"), series);
+  if (!AMBIENT_PREVIEW) window.JpcAmbient?.set(ambientFor(body.data));
 }
+
+/* ---------- Værbakgrunn ---------- */
+
+// Oversetter været nå til lagene i ambient.js, med styrke 0–1.
+function ambientFor({ current, nowcast }) {
+  const code = current.code;
+  const layers = {};
+  const sky = current.day ? "sun" : "stars";
+  if (code <= 1) {
+    layers[sky] = 1;
+    if (code === 1) layers.clouds = 0.3;
+  } else if (code === 2) {
+    layers[sky] = 0.6;
+    layers.clouds = 0.6;
+  } else if (code === 3) {
+    layers.clouds = 1;
+  } else if (code === 45 || code === 48) {
+    layers.fog = 1;
+  } else if (code >= 95) {
+    Object.assign(layers, { rain: 1, lightning: 1, clouds: 1 });
+  } else if (code === 66 || code === 67) {
+    Object.assign(layers, { rain: 0.5, snow: 0.5, clouds: 0.8 });
+  } else if ((code >= 71 && code <= 77) || code === 85 || code === 86) {
+    layers.snow = { 71: 0.4, 73: 0.7, 75: 1, 77: 0.4, 85: 0.6, 86: 1 }[code];
+    layers.clouds = 0.7;
+  } else if (code >= 51) {
+    layers.rain = { 51: 0.3, 53: 0.4, 55: 0.5, 61: 0.4, 63: 0.7, 65: 1, 80: 0.5, 81: 0.75, 82: 1 }[code] ?? 0.6;
+    layers.clouds = 0.8;
+  }
+
+  // Radaren vet bedre enn timesymbolet hva som faller akkurat nå.
+  const rate = nowcast?.points?.[0]?.rate ?? 0;
+  if (rate >= 0.1 && !layers.rain && !layers.snow) {
+    layers[current.temp <= 0.5 ? "snow" : "rain"] = Math.min(1, 0.3 + rate / 4);
+    layers.clouds = Math.max(layers.clouds || 0, 0.8);
+  }
+
+  // Vindkast teller litt, så en byget dag med rolig middelvind også synes.
+  const windy = Math.max(current.wind, (current.gust ?? 0) * 0.6);
+  if (windy >= 8) layers.wind = Math.min(1, (windy - 6) / 8);
+
+  // windDir er retningen vinden kommer fra; den blåser motsatt vei.
+  // 10 m/s gir omtrent 140 px/s sideveis på lerretet.
+  const sideways = current.windDir == null ? 1 : -Math.sin(current.windDir * Math.PI / 180);
+  return {
+    layers,
+    windX: Math.round(sideways * current.wind * 14),
+    dark: Boolean(layers.rain || layers.snow || layers.lightning),
+    night: !current.day,
+  };
+}
+
+// Forhåndsvisning uten å vente på riktig vær: ?vaer=snø,vind
+// Lag: sol, natt, skyer, tåke, regn, sludd, snø, torden, vind.
+const AMBIENT_PREVIEW = (() => {
+  const wanted = new URLSearchParams(location.search).get("vaer");
+  if (!wanted) return null;
+  const presets = {
+    sol: { sun: 1 }, natt: { stars: 1 }, skyer: { clouds: 1 }, "tåke": { fog: 1 },
+    regn: { rain: 0.8, clouds: 0.8 }, sludd: { rain: 0.5, snow: 0.5, clouds: 0.8 },
+    "snø": { snow: 0.8, clouds: 0.7 }, torden: { rain: 1, lightning: 1, clouds: 1 }, vind: { wind: 1 },
+  };
+  const layers = {};
+  for (const name of wanted.toLowerCase().split(",")) Object.assign(layers, presets[name.trim()]);
+  return {
+    layers,
+    windX: layers.wind ? 160 : 0,
+    dark: Boolean(layers.rain || layers.snow || layers.lightning),
+    night: Boolean(layers.stars),
+  };
+})();
+if (AMBIENT_PREVIEW) window.JpcAmbient?.set(AMBIENT_PREVIEW);
 
 // Oppsummerer METs radarbaserte nedbørsvarsel for de neste 90 minuttene.
 // Tom streng betyr opphold hele perioden.

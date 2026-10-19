@@ -67,6 +67,17 @@ ol, ul { list-style: none; }
   overflow: hidden;
 }
 
+/* Værbakgrunnen (ambient.js) ligger bak alt annet på lerretet. */
+.ambient {
+  position: absolute;
+  inset: 0;
+  width: 1080px;
+  height: 1920px;
+  pointer-events: none;
+  z-index: 0;
+}
+.screen > :not(.ambient):not(.xp) { position: relative; z-index: 1; }
+
 /* ---------- Topp ---------- */
 
 .masthead {
@@ -466,6 +477,9 @@ ol, ul { list-style: none; }
 
 .news-stage {
   display: grid;
+  /* Et langt ord eller en URL i en sak skal aldri gjøre kolonnen bredere. */
+  grid-template-columns: minmax(0, 1fr);
+  overflow-wrap: anywhere;
   flex: 0 0 236px;
   overflow: hidden;
 }
