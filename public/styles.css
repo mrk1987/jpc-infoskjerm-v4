@@ -34,6 +34,8 @@ html, body {
   color: var(--text);
   font-family: var(--ui);
   -webkit-font-smoothing: antialiased;
+  /* Hindrer at et sveip på berøringsskjermen blir «tilbake»/«frem» i Edge og Chrome. */
+  overscroll-behavior: none;
 }
 
 [hidden] { display: none !important; }
