@@ -21,9 +21,32 @@ avgangstavle i LED-stil. Etterfølger av
 - **Automatisk omlasting** når en ny versjon deployes, og hver natt kl. 04.
 - Fast lerret på 1080 × 1920 som skaleres til skjermen, slik at oppsettet er identisk overalt.
 
-## Innhold redigeres som før
+## Ukemeny hentes automatisk fra intranettet
 
-Meny, avstemning, kontorbeskjed og nedtelling leses fortsatt fra **originalrepoet**
+Kantinen legger ut ukemenyen på «Min side» på
+[intranett.skullerudpark.no](https://intranett.skullerudpark.no/) bak innlogging. Serveren logger
+inn og leser menyen selv:
+
+- én gang ved oppstart
+- deretter hver hele time fra **mandag 00:00** til menyen for inneværende uke er bekreftet;
+  kommer den ikke på mandag, fortsetter forsøkene hver time utover uka
+- når uka er bekreftet, står skraperen stille til neste mandag
+
+Intranettet oppgir ikke allergener. Har `menu.csv` samme uke, hentes allergenene derfra. Ligger
+`menu.csv` på en nyere uke enn intranettet, eller feiler innloggingen, brukes `menu.csv` som før.
+`/healthz` viser hvilken uke som er hentet, når det sist ble sjekket og eventuell feil.
+
+| Miljøvariabel | Innhold |
+|---|---|
+| `INTRANET_USER` | Brukernavn på intranettet (settes i Coolify, **aldri i repoet**) |
+| `INTRANET_PASSWORD` | Passord (settes i Coolify, **aldri i repoet**) |
+| `INTRANET_BUILDING` | Hvilket byggs meny som vises, `OH5` (standard) eller `OH6` |
+
+Uten `INTRANET_USER`/`INTRANET_PASSWORD` brukes bare `menu.csv`.
+
+## Annet innhold redigeres som før
+
+Avstemning, kontorbeskjed, nedtelling og reservemenyen leses fortsatt fra **originalrepoet**
 `KrakenSaten/jpc-infoskjerm`, på samme format som før:
 
 | Innhold | Fil i originalrepoet |

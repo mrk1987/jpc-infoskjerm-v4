@@ -362,6 +362,12 @@ function splitDish(title) {
   if (match && match.index > 0) {
     return { main: title.slice(0, match.index).trim(), sub: title.slice(match.index + match[0].length).trim() };
   }
+  // Intranettet skriver «Rett med tilbehør» uten tankestrek.
+  const med = title.search(/\s(med|m\/)\s/i);
+  if (med > 0) {
+    const sub = title.slice(med + 1).trim();
+    return { main: title.slice(0, med).trim(), sub: sub[0].toUpperCase() + sub.slice(1) };
+  }
   return { main: title, sub: "" };
 }
 

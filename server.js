@@ -297,6 +297,121 @@ function parseMenu(text) {
   return { week, days };
 }
 
+/* ---------- Ukemeny fra Skullerud Park-intranettet ---------- */
+
+// Kantinemenyen publiseres på «Min side» bak WordPress-innlogging. Brukernavn
+// og passord kommer fra miljøvariabler i Coolify og skal aldri i repoet.
+const INTRANET = {
+  base: "https://intranett.skullerudpark.no",
+  user: process.env.INTRANET_USER || "",
+  password: process.env.INTRANET_PASSWORD || "",
+  building: process.env.INTRANET_BUILDING || "OH5",
+};
+
+function cookieHeader(response, jar = new Map()) {
+  for (const raw of response.headers.getSetCookie?.() || []) {
+    const [pair] = raw.split(";");
+    const eq = pair.indexOf("=");
+    if (eq > 0) jar.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim());
+  }
+  return jar;
+}
+
+const jarToHeader = jar => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+
+function parseIntranetMenu(html, building) {
+  const week = Number(html.match(/Meny,\s*uke\s*(\d+)/i)?.[1]);
+  if (!week) throw new Error("fant ikke «Meny, uke N» på intranettet");
+
+  // Én liste per bygg (OH5/OH6). Fall tilbake på første liste hvis bygget mangler.
+  const blocks = [...html.matchAll(/data-building="([^"]*)"[^>]*>([\s\S]*?)<\/ul>/gi)];
+  const block = blocks.find(b => b[1] === building) || blocks[0];
+  if (!block) throw new Error("fant ingen menyliste på intranettet");
+
+  const days = [...block[2].matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)]
+    .map(([, li]) => decodeXml(li).replace(/\s+/g, " ").trim())
+    .map(line => {
+      const m = line.match(/^(\p{L}+)\s*:\s*(.+)$/u);
+      if (!m) return null;
+      const found = WEEKDAY_ALIASES.findIndex(aliases => aliases.includes(m[1].toLowerCase()));
+      return found >= 0 ? { day: found + 1, title: m[2].trim(), allergens: "" } : null;
+    })
+    .filter(Boolean);
+  if (!days.length) throw new Error("menylisten på intranettet er tom");
+  return { week, days };
+}
+
+async function loadIntranetMenu() {
+  // Vanlig fetch, ikke fetchWithTimeout: vellykket innlogging svarer 302,
+  // som fetchWithTimeout ville behandlet som feil.
+  const login = await fetch(`${INTRANET.base}/wp-login.php`, {
+    method: "POST",
+    redirect: "manual",
+    signal: AbortSignal.timeout(10_000),
+    headers: {
+      "User-Agent": UA,
+      "Content-Type": "application/x-www-form-urlencoded",
+      Cookie: "wordpress_test_cookie=WP%20Cookie%20check",
+    },
+    body: new URLSearchParams({
+      log: INTRANET.user,
+      pwd: INTRANET.password,
+      "wp-submit": "Logg inn",
+      redirect_to: INTRANET.base + "/",
+      testcookie: "1",
+    }),
+  });
+  const jar = cookieHeader(login);
+  if (![...jar.keys()].some(k => k.startsWith("wordpress_logged_in"))) {
+    throw new Error("innlogging på intranettet feilet");
+  }
+  const page = await fetchWithTimeout(INTRANET.base + "/", { headers: { Cookie: jarToHeader(jar) } });
+  return parseIntranetMenu(await page.text(), INTRANET.building);
+}
+
+// Kantinen legger ut ny meny i løpet av mandagen. Vi skraper derfor ikke hele
+// tiden, men én gang ved oppstart og deretter hver hele time fra mandag 00:00
+// til menyen for inneværende uke er bekreftet. Er den ikke kommet på mandag,
+// fortsetter forsøkene hver time utover uka. Når uka er bekreftet, står
+// skraperen stille til neste mandag.
+const intranetMenu = { menu: null, checkedAt: null, lastError: null };
+
+function isoWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d - yearStart) / 86_400_000 + 1) / 7);
+}
+
+async function scrapeIntranetMenu(reason) {
+  if (!INTRANET.user || !INTRANET.password) return;
+  const week = isoWeek(new Date());
+  if (intranetMenu.menu?.week === week) return;
+  try {
+    const menu = await loadIntranetMenu();
+    intranetMenu.menu = menu;
+    intranetMenu.lastError = null;
+    console.log(`[intranett] ${reason}: hentet meny for uke ${menu.week}` +
+      (menu.week === week ? " (bekreftet)" : ` — venter fortsatt på uke ${week}, prøver igjen om en time`));
+    if (menu.week === week) cache.delete("office");
+  } catch (error) {
+    intranetMenu.lastError = error.message;
+    console.warn(`[intranett] ${reason}: ${error.message} — prøver igjen om en time`);
+  } finally {
+    intranetMenu.checkedAt = new Date().toISOString();
+  }
+}
+
+function scheduleIntranetScrape() {
+  const next = new Date();
+  next.setMinutes(0, 0, 0);
+  next.setHours(next.getHours() + 1);
+  setTimeout(() => {
+    scrapeIntranetMenu("timesjekk").finally(scheduleIntranetScrape);
+  }, next - Date.now());
+}
+
 function parsePoll(text) {
   const { headers, data } = csvRows(text);
   const [iType, iKey, iValue] = ["type", "key", "value"].map(n => headers.indexOf(n));
@@ -362,6 +477,22 @@ function parseNotice(indexHtml) {
   return { tag: inner("notice-tag"), message };
 }
 
+// Intranettet er hovedkilden for menyen fordi det oppdateres av kantinen selv.
+// menu.csv brukes som reserve, og som kilde til allergener for samme uke,
+// siden intranettet ikke oppgir dem.
+async function pickMenu(csvMenu) {
+  const fromIntranet = intranetMenu.menu;
+  if (!fromIntranet) return { ...csvMenu, source: "csv" };
+  const csv = csvMenu.value;
+  // Ligger menu.csv på en nyere uke enn intranettet, har noen lagt den inn manuelt.
+  if (csv && csv.week > fromIntranet.week) return { ...csvMenu, source: "csv" };
+  const days = fromIntranet.days.map(day => ({
+    ...day,
+    allergens: csv?.week === fromIntranet.week ? csv.days.find(d => d.day === day.day)?.allergens || "" : "",
+  }));
+  return { value: { week: fromIntranet.week, days }, source: "intranet" };
+}
+
 // Henter alle fire filer fra samme commit. Raw-URL-er med commit-sha er
 // immutable, så vi slipper raw.githubusercontent.com sin 5-minutters CDN-cache
 // og ser endringer så snart vi ser ny sha.
@@ -392,7 +523,8 @@ async function loadOffice() {
     try { return { value: parser(result.value) }; } catch (error) { return { error: error.message }; }
   };
 
-  const menu = attempt(menuText, parseMenu);
+  const csvMenu = attempt(menuText, parseMenu);
+  const menu = await pickMenu(csvMenu);
   const poll = attempt(pollText, parsePoll);
   const countdown = attempt(configText, parseCountdown);
   const notice = attempt(indexText, parseNotice);
@@ -404,6 +536,7 @@ async function loadOffice() {
     ref: ref.slice(0, 7),
     menu: menu.value ?? null,
     menuError: menu.error ?? null,
+    menuSource: menu.source,
     poll: poll.value ?? null,
     pollError: poll.error ?? null,
     countdown: countdown.value ?? null,
@@ -430,7 +563,19 @@ const ROUTES = {
   "/api/news": () => cached("news", 5 * 60_000, loadNews),
   "/api/office": () => cached("office", 3 * 60_000, loadOffice),
   "/api/version": async () => ({ data: { version: VERSION } }),
-  "/healthz": async () => ({ data: { ok: true, version: VERSION } }),
+  "/healthz": async () => ({
+    data: {
+      ok: true,
+      version: VERSION,
+      intranetMenu: {
+        configured: Boolean(INTRANET.user && INTRANET.password),
+        week: intranetMenu.menu?.week ?? null,
+        currentWeek: isoWeek(new Date()),
+        checkedAt: intranetMenu.checkedAt,
+        lastError: intranetMenu.lastError,
+      },
+    },
+  }),
 };
 
 const MIME = {
@@ -488,6 +633,8 @@ createServer(async (req, res) => {
       "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store",
     });
   }
-}).listen(PORT, () => {
+}).listen(PORT, async () => {
+  await scrapeIntranetMenu("oppstart");
+  scheduleIntranetScrape();
   console.log(`infoskjerm v4 (${VERSION}) lytter på :${PORT}, innhold fra ${CONTENT_REPO}@${CONTENT_BRANCH}`);
 });
