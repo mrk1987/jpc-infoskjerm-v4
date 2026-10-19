@@ -153,7 +153,10 @@ function renderDirection(column, departures, now) {
   next.append(el("div", "when" + (firstLate ? " late" : ""), whenText(first, now)));
   const dest = el("div", "dest");
   dest.append(text("span", "line", first.line), text("span", "", first.destination));
-  if (first.delayMin >= 2 && !first.cancelled) dest.append(text("span", "delay-note", `${first.delayMin} min forsinket`));
+  // Kort «+3 min» på én linje, som i det utvidede vinduet. «3 min forsinket»
+  // brøt over to linjer og gjorde kolonnen høyere enn den andre, så radene
+  // under ikke lenger sto på linje.
+  if (first.delayMin >= 2 && !first.cancelled) dest.append(text("span", "delay-note", `+${first.delayMin} min`));
   next.append(dest);
 
   for (const dep of rest.slice(0, 2)) {

@@ -199,12 +199,24 @@ ol, ul { list-style: none; }
 
 @keyframes beat { 50% { opacity: .35; } }
 
+/* To like brede kolonner. Skillelinja tegnes for seg midt i mellomrommet;
+   som kantlinje med innrykk på høyre kolonne ble den 22 px til høyre for
+   midten og gjorde høyre kolonne 46 px smalere. */
 .board-cols {
+  position: relative;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 44px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 88px;
 }
-.dir + .dir { border-left: 2px dashed rgba(255, 178, 56, .14); padding-left: 44px; }
+.board-cols::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  border-left: 2px dashed rgba(255, 178, 56, .14);
+  transform: translateX(-1px);
+}
 
 .dir h3 {
   font-size: 26px;
@@ -281,10 +293,12 @@ ol, ul { list-style: none; }
 }
 .delay-note {
   font-family: var(--ui);
-  font-size: 22px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0;
   color: var(--late);
   text-shadow: none;
+  white-space: nowrap;
   margin-left: auto;
 }
 
@@ -784,8 +798,17 @@ ol, ul { list-style: none; }
 .badge.bus { background: #d9232a; color: #fff; }
 .xp-h .badge { min-width: 42px; height: 34px; font-size: 19px; }
 
-.xp-dep-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 44px; }
-.xp-dep-col + .xp-dep-col { border-left: 2px dashed rgba(255, 178, 56, .14); padding-left: 44px; margin-left: -22px; }
+/* Samme symmetriske oppsett som tavla: like kolonner, skillelinje midt i mellomrommet. */
+.xp-dep-cols { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 88px; }
+.xp-dep-cols::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  border-left: 2px dashed rgba(255, 178, 56, .14);
+  transform: translateX(-1px);
+}
 .xp-dep-col h4 { font: 700 26px var(--ui); color: var(--text); margin-bottom: 4px; }
 
 .dep-list li {
