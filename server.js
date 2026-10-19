@@ -364,8 +364,6 @@ async function loadWeather() {
       text: symbol.text,
       wind: details.wind_speed ?? 0,
       gust: details.wind_speed_of_gust ?? null,
-      // Retningen vinden kommer fra, i grader. Værbakgrunnen blåser motsatt vei.
-      windDir: details.wind_from_direction ?? null,
       // Skydekke, tåke og tordensannsynlighet i prosent, som styrer værbakgrunnen.
       cloud: details.cloud_area_fraction ?? null,
       fog: details.fog_area_fraction ?? null,

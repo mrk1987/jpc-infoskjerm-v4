@@ -342,12 +342,11 @@ function ambientFor({ current, nowcast }) {
   const windy = Math.max(current.wind, (current.gust ?? 0) * 0.6);
   if (windy >= 8) layers.wind = clampNum((windy - 6) / 10, 0.2, 1);
 
-  // windDir er retningen vinden kommer fra; den blåser motsatt vei.
-  // 10 m/s gir omtrent 140 px/s sideveis på lerretet.
-  const sideways = current.windDir == null ? 1 : -Math.sin(current.windDir * Math.PI / 180);
+  // Vinden styrer vinkelen på regn og snø (se ambient.js), ikke retningen:
+  // på skjermen blåser alt fra høyre mot venstre.
   return {
     layers,
-    windX: Math.round(sideways * current.wind * 14),
+    wind: Math.round(windy * 10) / 10,
     dark: Boolean(layers.rain || layers.snow || layers.lightning),
     night: !current.day,
   };
@@ -383,8 +382,8 @@ const AMBIENT_PREVIEW = (() => {
   }
   return {
     layers,
-    // Samme regel som ekte vind: styrke 1 tilsvarer 16 m/s.
-    windX: Math.round((6 + windStrength * 10) * 14 * (windStrength ? 1 : 0)),
+    // vind:1 er storm (24 m/s, nesten vannrett regn), vind:0.5 er 16 m/s.
+    wind: windStrength ? 8 + windStrength * 16 : 0,
     dark: Boolean(layers.rain || layers.snow || layers.lightning),
     night: Boolean(layers.stars),
   };
