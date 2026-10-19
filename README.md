@@ -19,7 +19,10 @@ avgangstavle i LED-stil. Etterfølger av
   («Regn om 15 min»), basert på METs radarbaserte korttidsvarsel (Nowcast).
 - **Nyheter i to kolonner**, NRK til venstre og ITavisen til høyre. Hver kolonne viser én sak om gangen med ingress, og resten av plassen fylles med de neste sakene. Kolonnene bytter sak forskjøvet med seks sekunder.
 - **Lunsj bytter til neste arbeidsdag** etter servering, og hopper over helg og helligdager.
-- **Utløpt nedtelling skjules** i stedet for å stå på 00 00 00 00.
+- **Nedtelling nederst.** Er det satt en JPC-nedtelling i `config.js` som ikke har passert, vises
+  den. Ellers telles det ned til neste røde dag (norske helligdager, de samme som på
+  [rodedager.no](https://www.rodedager.no/)): faste datoer pluss dager regnet fra påske, beregnet
+  lokalt uten ekstern tjeneste. På selve helligdagen telles det mot den neste.
 - **Automatisk omlasting** når en ny versjon deployes, og hver natt kl. 04.
 - Fast lerret på 1080 × 1920 som skaleres til skjermen, slik at oppsettet er identisk overalt.
 

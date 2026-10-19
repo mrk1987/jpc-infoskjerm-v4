@@ -615,6 +615,13 @@ ol, ul { list-style: none; }
   line-height: 1.15;
   text-wrap: balance;
 }
+.cd-kicker {
+  display: block;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
 .cd-digits { display: flex; gap: 20px; flex: none; }
 .cd-unit { text-align: center; min-width: 74px; }
 .cd-unit b {

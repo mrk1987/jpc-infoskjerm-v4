@@ -513,15 +513,47 @@ function easterSunday(year) {
   return new Date(year, month - 1, day);
 }
 
-function isHoliday(date) {
-  const fixed = [[0, 1], [4, 1], [4, 17], [11, 25], [11, 26]];
-  if (fixed.some(([mo, d]) => date.getMonth() === mo && date.getDate() === d)) return true;
-  const easter = easterSunday(date.getFullYear());
-  return [-3, -2, 0, 1, 39, 49, 50].some(offset => {
+// Norske helligdager (de røde dagene i almanakken, som på rodedager.no):
+// faste datoer pluss dager regnet fra første påskedag. Samme dato kan ha to
+// navn, f.eks. 17. mai 2027, som også er 2. pinsedag.
+function holidays(year) {
+  const easter = easterSunday(year);
+  const fromEaster = days => {
     const d = new Date(easter);
-    d.setDate(d.getDate() + offset);
-    return d.toDateString() === date.toDateString();
-  });
+    d.setDate(d.getDate() + days);
+    return d;
+  };
+  const list = [
+    [new Date(year, 0, 1), "Nyttårsdag"],
+    [fromEaster(-3), "Skjærtorsdag"],
+    [fromEaster(-2), "Langfredag"],
+    [fromEaster(0), "1. påskedag"],
+    [fromEaster(1), "2. påskedag"],
+    [new Date(year, 4, 1), "Arbeidernes dag"],
+    [new Date(year, 4, 17), "Grunnlovsdagen"],
+    [fromEaster(39), "Kristi himmelfartsdag"],
+    [fromEaster(49), "1. pinsedag"],
+    [fromEaster(50), "2. pinsedag"],
+    [new Date(year, 11, 25), "1. juledag"],
+    [new Date(year, 11, 26), "2. juledag"],
+  ].sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const [date, name] of list) {
+    const same = merged.find(h => h.date.toDateString() === date.toDateString());
+    if (same) same.name += " og " + name.toLowerCase();
+    else merged.push({ date, name });
+  }
+  return merged;
+}
+
+function isHoliday(date) {
+  return holidays(date.getFullYear()).some(h => h.date.toDateString() === date.toDateString());
+}
+
+// Første helligdag etter i dag. På selve dagen telles det mot den neste.
+function nextHoliday(now) {
+  const year = new Date(now).getFullYear();
+  return [...holidays(year), ...holidays(year + 1)].find(h => h.date.getTime() > now);
 }
 
 function splitDish(title) {
@@ -641,15 +673,30 @@ function renderNotice() {
   $("notice-msg").textContent = notice.message;
 }
 
-function renderCountdown(now = Date.now()) {
+// JPCs egen nedtelling (config.js i innholdsrepoet) går foran. Er den ikke
+// satt eller allerede passert, telles det ned til neste røde dag.
+function countdownTarget(now) {
   const cd = state.office?.data?.countdown;
+  const target = cd ? Date.parse(cd.target) : NaN;
+  if (target > now) return { target, label: cd.label || "Nedtelling" };
+  const holiday = nextHoliday(now);
+  if (!holiday) return null;
+  const d = holiday.date;
+  const day = WEEKDAYS[d.getDay()];
+  return { target: d.getTime(), kicker: "Neste røde dag", label: `${holiday.name}, ${day} ${d.getDate()}. ${MONTHS[d.getMonth()]}` };
+}
+
+function renderCountdown(now = Date.now()) {
   const box = $("countdown");
-  const left = cd ? Date.parse(cd.target) - now : -1;
+  const cd = countdownTarget(now);
+  const left = cd ? cd.target - now : -1;
   // Utløpt nedtelling skjules i stedet for å stå på 00 00 00 00.
   box.hidden = !(left > 0);
   if (box.hidden) return;
 
-  $("cd-label").textContent = cd.label || "Nedtelling";
+  const label = $("cd-label");
+  label.textContent = cd.label;
+  if (cd.kicker) label.prepend(text("span", "cd-kicker", cd.kicker));
   const s = Math.floor(left / 1000);
   const units = [
     [Math.floor(s / 86400), "dager"],
