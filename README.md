@@ -38,6 +38,29 @@ av seg selv**; ringen rundt krysset viser tiden som er igjen, og hver berøring 
 Skjermen navigerer aldri bort fra seg selv: lenker til saker vises som QR-kode, ikke som klikkbare
 lenker. Zoom, tekstmarkering og langt trykk er slått av, og bare innholdet i vinduet kan rulles.
 
+### Nyhetskilder
+
+Høyre kolonne var digi.no frem til 2026-10-19, men hele sakene der ligger bak betalingsmur
+(innlogging via TU Media, `konto.tumedia.no`), så vinduet kunne bare vise ingressen. ITavisen er
+gratis og har hele saken i RSS (`content:encoded`). Serveren fjerner innebygde tweets, skript og
+reklamewidgeter, og filtrerer bort annonsørinnhold, som ITavisen merker med versaler foran kolon
+(«TIDSBEGRENSET: …»). ITavisen heller mer mot forbrukerteknologi enn digi.no. Det finnes ingen
+gratis norsk kilde med digi.nos B2B-vinkel og fulltekst.
+
+### Kiosk-PC
+
+Skjermen drives av en Windows 11-PC med Edge eller Chrome i fullskjerm, ikke Flip-skjermens
+innebygde nettleser.
+
+- **Start Edge i kioskmodus**, så ingen kan sveipe eller trykke seg ut av siden:
+  `msedge --kiosk https://infoskjerm.kokkinos.no --edge-kiosk-type=fullscreen`
+- **Slå av kantsveip i Windows.** Sveip inn fra kanten åpner varslingssenteret og widgeter, og det
+  kan ikke en nettside stoppe. Gruppepolicy: *Datamaskinkonfigurasjon → Administrative maler →
+  Windows-komponenter → Edge UI → Allow edge swipe = Deaktivert*, eller registerverdien
+  `HKLM\SOFTWARE\Policies\Microsoft\Windows\EdgeUI\AllowEdgeSwipe = 0` (DWORD).
+- Desktop-Chrome/Edge ignorerer `user-scalable=no`. Zoom stoppes i stedet av `touch-action: none`
+  på lerretet, og sveip tilbake/frem av `overscroll-behavior: none`.
+
 QR-kodene lages av [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) 1.4.4
 (MIT), lagt inn som `public/qrcode.js`.
 
