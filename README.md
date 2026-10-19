@@ -32,7 +32,11 @@ avgangstavle i LED-stil. Etterfølger av
   (`JPC_DAYS_OFF` i `public/app.js`). De vises som «Neste fridag» og teller med i langhelger og
   inneklemte dager, men ikke i kantinens «Stengt, helligdag».
 - **Automatisk omlasting** når en ny versjon deployes, og hver natt kl. 04.
-- Fast lerret på 1080 × 1920 som skaleres til skjermen, slik at oppsettet er identisk overalt.
+- **Fyller hele skjermen uansett format.** Innholdet skaleres etter bredden (1080 px), og
+  høyden følger skjermen: en høyere skjerm gir flere nyhetssaker. Er skjermen så bred at
+  høyden ville blitt under 1600 px, skaleres det etter høyden og oppsettet blir bredere (det
+  fungerer på en liggende skjerm, men er laget for stående). En 9:16-skjerm får nøyaktig
+  1080 × 1920.
 
 ## Trykk for mer (berøringsskjerm)
 

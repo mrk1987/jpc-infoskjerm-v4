@@ -12,8 +12,10 @@
 // sekunder med en ujevn front, og glimter svakt når det er ferdig.
 // ambient.js styrer styrken (0–1) via JpcFrost.draw.
 (() => {
-  const W = 1080;
-  const H = 1920;
+  // Lerretets størrelse i CSS-piksler. Settes av resize() etter skjermens
+  // format; rammebildet strekkes til den, så rimet følger kantene uansett.
+  let W = 1080;
+  let H = 1920;
   const GROW_S = 8; // sekunder fra klar rute til ferdig rim
   const MASK_SCALE = 0.25; // vekstmasken regnes ut i kvart oppløsning og skaleres opp
 
@@ -42,13 +44,9 @@
 
   // Rimet avsløres fra kantene og innover. Fronten følger avstanden til
   // nærmeste kant, gjort ujevn med støy, og når til slutt hele bildet.
-  const MW = Math.round(W * MASK_SCALE);
-  const MH = Math.round(H * MASK_SCALE);
   const maskCanvas = document.createElement("canvas");
-  maskCanvas.width = MW;
-  maskCanvas.height = MH;
   const mctx = maskCanvas.getContext("2d");
-  const maskData = mctx.createImageData(MW, MH);
+  let MW = 0, MH = 0, maskData = null, distOf = null;
 
   // Glatt verdistøy, så fronten blir ujevn og organisk.
   const GRID = 24;
@@ -66,15 +64,26 @@
 
   // Når fronten har kommet så langt inn, er hele rammen avslørt.
   const FULL_REACH = 620;
-  const distOf = new Float32Array(MW * MH);
-  for (let y = 0; y < MH; y++) {
-    for (let x = 0; x < MW; x++) {
-      const px = (x + 0.5) / MASK_SCALE, py = (y + 0.5) / MASK_SCALE;
-      const edge = Math.min(px, W - px, py, H - py);
-      // Støyen gjør at noen bregner kommer før andre.
-      distOf[y * MW + x] = edge * (0.75 + 0.5 * noise(x / MW, y / MH));
+
+  // Avstanden til nærmeste kant for hver celle i masken. Regnes på nytt når
+  // skjermens format endres.
+  function layoutMask() {
+    MW = Math.round(W * MASK_SCALE);
+    MH = Math.round(H * MASK_SCALE);
+    maskCanvas.width = MW;
+    maskCanvas.height = MH;
+    maskData = mctx.createImageData(MW, MH);
+    distOf = new Float32Array(MW * MH);
+    for (let y = 0; y < MH; y++) {
+      for (let x = 0; x < MW; x++) {
+        const px = (x + 0.5) / MASK_SCALE, py = (y + 0.5) / MASK_SCALE;
+        const edge = Math.min(px, W - px, py, H - py);
+        // Støyen gjør at noen bregner kommer før andre.
+        distOf[y * MW + x] = edge * (0.75 + 0.5 * noise(x / MW, y / MH));
+      }
     }
   }
+  layoutMask();
 
   function updateMask(grow) {
     const d = maskData.data;
@@ -113,11 +122,13 @@
 
   // Glimtene plasseres der rimet er tettest når det er ferdig grodd.
   function placeSparkles() {
-    const data = cctx.getImageData(0, 0, W, H).data;
+    // Bufferens heltallsstørrelse; W og H kan være desimaltall.
+    const cw = composed.width, ch = composed.height;
+    const data = cctx.getImageData(0, 0, cw, ch).data;
     sparkles = [];
     for (let tries = 0; tries < 6000 && sparkles.length < 90; tries++) {
-      const x = Math.floor(Math.random() * W), y = Math.floor(Math.random() * H);
-      if (data[(y * W + x) * 4 + 3] > 200) {
+      const x = Math.floor(Math.random() * cw), y = Math.floor(Math.random() * ch);
+      if (data[(y * cw + x) * 4 + 3] > 200) {
         sparkles.push({ x, y, r: 0.8 + Math.random() * 1.2, phase: Math.random() * 6.28, speed: 0.6 + Math.random() * 1.6 });
       }
     }
@@ -161,7 +172,15 @@
       ctx.globalAlpha = 1;
       visible = true;
     },
-    resize(res) {
+    resize(res, w = W, h = H) {
+      if (w !== W || h !== H) {
+        W = w;
+        H = h;
+        layoutMask();
+        composed.width = Math.round(W);
+        composed.height = Math.round(H);
+        lastGrow = -1; // sett sammen rimet på nytt i ny størrelse
+      }
       canvas.width = Math.round(W * res);
       canvas.height = Math.round(H * res);
       ctx.setTransform(res, 0, 0, res, 0, 0);

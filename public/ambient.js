@@ -14,8 +14,9 @@
 // de har falt ut av skjermen. Da ser det ut som om regnet tiltar eller
 // stilner, i stedet for at bildet hopper.
 (() => {
-  const W = 1080;
-  const H = 1920;
+  // Lerretets størrelse i CSS-piksler. Settes av resize() etter skjermens format.
+  let W = 1080;
+  let H = 1920;
   const TAU = Math.PI * 2;
   const EASE_S = 4; // tidskonstant for overgangen mellom styrker
   const canvas = document.getElementById("ambient");
@@ -522,13 +523,18 @@
       if ((target.dark ? "#7d8aa0" : "#dfe8f5") !== cloudTint) buildClouds();
       render();
     },
-    // Lerretet følger skjermens oppløsning, men høyst 1,5× for å spare GPU.
-    resize(scale) {
+    // Lerretet følger skjermens format (w × h) og oppløsning, men høyst 1,5×
+    // for å spare GPU. Endres formatet, legges stjerner, skyer og tåke ut på nytt.
+    resize(scale, w = W, h = H) {
+      const changed = w !== W || h !== H;
+      W = w;
+      H = h;
       const res = clamp(scale * (window.devicePixelRatio || 1), 0.5, 1.5);
       canvas.width = Math.round(W * res);
       canvas.height = Math.round(H * res);
       ctx.setTransform(res, 0, 0, res, 0, 0);
-      frost()?.resize(res);
+      if (changed) buildStatic();
+      frost()?.resize(res, W, H);
       if (reduceMotion) render();
     },
   };

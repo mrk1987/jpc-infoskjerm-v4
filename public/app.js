@@ -27,13 +27,28 @@ const state = {
 
 /* ---------- Skalering av lerretet ---------- */
 
+// Lerretet fyller hele skjermen uansett format. Innholdet skaleres etter
+// bredden (1080 px), og høyden følger skjermen: en høyere skjerm gir mer
+// plass til nyhetene, som strekker seg i den ledige høyden. Er skjermen så
+// bred at høyden ville blitt under 1600 px, skaleres det etter høyden i
+// stedet og oppsettet blir bredere. Skjermer på 9:16 får nøyaktig 1080 × 1920.
+const BASE_W = 1080;
+const MIN_H = 1600;
 let currentScale = 1;
+let screenW = 1080;
+let screenH = 1920;
 
 function fitScreen() {
-  const scale = Math.min(window.innerWidth / 1080, window.innerHeight / 1920);
-  $("screen").style.transform = `translate(-50%, -50%) scale(${scale})`;
+  const scale = Math.min(window.innerWidth / BASE_W, window.innerHeight / MIN_H);
+  screenW = window.innerWidth / scale;
+  screenH = window.innerHeight / scale;
+  const screen = $("screen");
+  screen.style.width = screenW + "px";
+  screen.style.height = screenH + "px";
+  screen.style.transform = `translate(-50%, -50%) scale(${scale})`;
   currentScale = scale;
-  window.JpcAmbient?.resize(scale);
+  window.JpcAmbient?.resize(scale, screenW, screenH);
+  fitNews();
 }
 
 /* ---------- Henting med lokal reserve ---------- */
@@ -928,8 +943,10 @@ async function loadNews() {
 // det er igjen, og hver berøring starter den på nytt.
 const PANEL_IDLE_MS = 3 * 60_000;
 const PANEL_MARGIN = 40;
-const PANEL_W = 1080 - 2 * PANEL_MARGIN;
-const PANEL_MAX_H = 1920 - 2 * PANEL_MARGIN;
+// Vinduet er like bredt som innholdet i .xp-inner (1000 px) og så høyt
+// som skjermen tillater; begge regnes ut når det åpnes, etter skjermens format.
+const PANEL_W = 1000;
+const panelMaxH = () => screenH - 2 * PANEL_MARGIN;
 const PANEL_EASE = "cubic-bezier(.2, .8, .2, 1)";
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -985,7 +1002,7 @@ const PANEL_HTML = `
 
 let panel = null;
 
-// Posisjon i lerretets egne piksler (1080 × 1920), uavhengig av skaleringen.
+// Posisjon i lerretets egne piksler, uavhengig av skaleringen.
 function rectIn(node) {
   const s = $("screen").getBoundingClientRect();
   const r = node.getBoundingClientRect();
@@ -1021,10 +1038,11 @@ function openPanel(key) {
   def.render(body);
 
   // Mål innholdets naturlige høyde i full bredde før animasjonen starter.
-  Object.assign(box.style, { left: PANEL_MARGIN + "px", top: "0px", width: PANEL_W + "px", height: "auto", visibility: "hidden" });
-  const height = def.full ? PANEL_MAX_H : Math.min(Math.ceil(inner.scrollHeight), PANEL_MAX_H);
+  const left = Math.round((screenW - PANEL_W) / 2);
+  Object.assign(box.style, { left: left + "px", top: "0px", width: PANEL_W + "px", height: "auto", visibility: "hidden" });
+  const height = def.full ? panelMaxH() : Math.min(Math.ceil(inner.scrollHeight), panelMaxH());
   inner.style.height = height + "px";
-  const to = { left: PANEL_MARGIN, top: Math.round((1920 - height) / 2), width: PANEL_W, height };
+  const to = { left, top: Math.round((screenH - height) / 2), width: PANEL_W, height };
   const from = rectIn(source);
   Object.assign(box.style, px(to), { visibility: "" });
   panel.to = to;
