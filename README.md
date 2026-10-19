@@ -107,7 +107,7 @@ stillbilde i stedet for animasjon.
 **Rimet er et ekte bilde.** `public/frost.webp` er laget av et bilde av en rimramme mot svart
 bakgrunn i 9:16, levert av Andreas 2026-10-19. `tools/make_frost.py` gjør lysstyrken om til
 dekkevne (svart blir klart glass, krystallene is) og farger det isblått. Rimet ligger bak panelene
-og teksten og er dempet til 42 % dekkevne; mens det ligger rim, får teksten en mørk glorie
+og teksten med 85 % dekkevne; mens det ligger rim, får teksten en mørk glorie
 (`.frosty` i `styles.css`). Generert rim (forgreinede streker, og en fasefelt-simulering av
 krystallvekst) ble prøvd først og så ut som spindelvev eller papp. Forhåndsvis med `?vaer=frost`
 eller `?vaer=frost,snø`.

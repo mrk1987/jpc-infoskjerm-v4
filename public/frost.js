@@ -148,12 +148,12 @@
       }
       setFrosty(k > 0.05);
       ctx.clearRect(0, 0, W, H);
-      // Dempet: rimet skal være en svak ramme, ikke konkurrere med innholdet.
-      ctx.globalAlpha = 0.42 * k;
+      // Rammen er tynn og holder seg i margene, så den tåler høy kontrast.
+      ctx.globalAlpha = 0.85 * k;
       ctx.drawImage(composed, 0, 0);
       ctx.fillStyle = "#ffffff";
       for (const s of sparkles) {
-        ctx.globalAlpha = k * Math.max(0, Math.sin(t * s.speed + s.phase)) * 0.6;
+        ctx.globalAlpha = k * Math.max(0, Math.sin(t * s.speed + s.phase)) * 0.9;
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
         ctx.fill();
