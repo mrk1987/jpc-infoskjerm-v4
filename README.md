@@ -75,7 +75,8 @@ Bak panelene går en dempet animasjon som speiler været ute (`public/ambient.js
 | Sludd | Regn og snø blandet |
 | Snø | Snøfnugg som vugger ned |
 | Torden | Kraftig regn og et sjeldent, svakt lysglimt |
-| Vind (fra 8 m/s, eller kast fra ~13 m/s) | Vindstriper på tvers, i kombinasjon med alt over. Regn og snø legger seg på skrå fra høyre mot venstre, mer jo sterkere det blåser: rett ned i stille vær, ~30° i frisk bris, ~50° i kuling, ~70° i sterk kuling og nesten vannrett i storm. Kompassretningen brukes ikke. |
+| Vind uten nedbør (fra 8 m/s, eller kast fra ~13 m/s) | Blader som tumler forbi fra høyre mot venstre, og små virvler som snurrer og tones ut. Bladene følger årstiden: høstfarger sep–nov, grønne blader om sommeren, grønt med lyse blomsterblader om våren, og fint fokksnø i stedet for blader om vinteren. |
+| Vind med regn, snø eller sludd | Ingen egne vindeffekter; nedbøren legger seg på skrå fra høyre mot venstre, mer jo sterkere det blåser: rett ned i stille vær, ~30° i frisk bris, ~50° i kuling, ~70° i sterk kuling og nesten vannrett i storm. Kompassretningen brukes ikke. |
 
 **Alt styres av Yrs tall for Skullerud, ikke av faste nivåer:**
 
@@ -86,7 +87,7 @@ Bak panelene går en dempet animasjon som speiler været ute (`public/ambient.js
 | Sol, stjerner | Det som er igjen av himmelen når skyer og tåke er trukket fra | 60 % skydekke gir sol med 40 % styrke |
 | Tåke | Yrs tåkedekke i prosent | |
 | Torden | Yrs sannsynlighet for torden neste time | 100 % gir et svakt lysglimt hvert 14.–40. sekund, 20 % omtrent hvert eller annet minutt |
-| Vind | Yrs middelvind og vindkast. Styrer vinkelen på regn og snø og farten på skyer og vindstriper; alt blåser fra høyre mot venstre. | Vindstriper fra 8 m/s (eller kast fra ~13 m/s). Vinkelen øker jevnt opp til ~80° ved 24 m/s (storm). |
+| Vind | Yrs middelvind og vindkast. Styrer vinkelen på regn og snø, og farten på skyer, blader og virvler; alt blåser fra høyre mot venstre. | Blader og virvler fra 8 m/s (eller kast fra ~13 m/s) når det er opphold, flere og raskere jo sterkere det blåser. Vinkelen på nedbøren øker jevnt opp til ~80° ved 24 m/s (storm). |
 
 Styrken går fra 0 til 1 på en logaritmisk skala, så yr, jevnt regn og styrtregn ser tydelig
 forskjellige ut. Endres været, glir lagene over til den nye styrken i løpet av noen sekunder: regnet
@@ -98,6 +99,8 @@ stillbilde i stedet for animasjon.
 `https://infoskjerm.kokkinos.no/?vaer=snø,vind`. Lag: `sol`, `natt`, `skyer`, `tåke`, `regn`,
 `sludd`, `snø`, `torden`, `vind`, kommaseparert. Styrke angis med kolon fra 0 til 1:
 `?vaer=regn:1,vind:1` er styrtregn i storm (nesten vannrett), `?vaer=regn:0.15` er yr.
+`&aarstid=vår|sommer|høst|vinter` viser bladene for en annen årstid, f.eks.
+`?vaer=vind&aarstid=vinter` for fokksnø.
 
 ### Kiosk-PC
 

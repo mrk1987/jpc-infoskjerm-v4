@@ -1,7 +1,8 @@
 // JPC Skullerud infoskjerm v4: værbakgrunn.
 //
 // Rolige animasjoner bak panelene som speiler været ute: sol, stjerner,
-// skyer, tåke, regn, sludd, snø, torden og vind. app.js bestemmer hvilke lag
+// skyer, tåke, regn, sludd, snø, torden og vind. Vind uten nedbør er blader
+// og virvler; med nedbør vises vinden bare som skrått regn eller snø. app.js bestemmer hvilke lag
 // som er på og hvor sterke de er (0 til 1); her tegnes alt på ett lerret.
 // Alt holdes dempet, så teksten foran alltid er lett å lese.
 //
@@ -30,7 +31,7 @@
   let sceneKey = "";
   let started = false;
   let cloudTint = "";
-  const pools = { stars: [], clouds: [], fog: [], rain: [], snow: [], gusts: [] };
+  const pools = { stars: [], clouds: [], fog: [], rain: [], snow: [], leaves: [], twirls: [] };
   let frame = 0;
   let last = 0;
   const flash = { level: 0, next: 0, second: 0 };
@@ -39,7 +40,9 @@
   const want = {
     rain: k => (k < 0.02 ? 0 : Math.round(30 + 570 * Math.pow(k, 1.2))),
     snow: k => (k < 0.02 ? 0 : Math.round(30 + 470 * k)),
-    gusts: k => (k < 0.02 ? 0 : Math.round(3 + 15 * k)),
+    leaves: k => (k < 0.02 ? 0 : Math.round(8 + 24 * k)),
+    powder: k => (k < 0.02 ? 0 : Math.round(40 + 160 * k)),
+    twirls: k => (k < 0.02 ? 0 : Math.round(3 + 6 * k)),
   };
 
   /* ---------- Sprites: skyer og tåke tegnes uskarpe én gang ---------- */
@@ -139,16 +142,53 @@
     };
   }
 
-  function gust(anywhere) {
-    const k = level.wind;
-    const len = rand(220, 360) + 220 * k;
+  // Vind uten nedbør vises som blader som blåser forbi og virvler i lufta.
+  // Bladene følger årstiden: høstfarger sep–nov, grønt om sommeren, grønt med
+  // lyse blomsterblader om våren, og fint fokksnø i stedet for blader om vinteren.
+  // ?aarstid=vår|sommer|høst|vinter overstyrer måneden i forhåndsvisningen.
+  const SEASON_MONTH = { "vår": 3, sommer: 6, "høst": 9, vinter: 0 }[
+    new URLSearchParams(location.search).get("aarstid")?.toLowerCase()];
+
+  function season(month = SEASON_MONTH ?? new Date().getMonth()) {
+    if (month >= 8 && month <= 10) return { powder: false, colors: ["#c8752a", "#d99a2b", "#a4442c", "#8a5a2b", "#b8862f", "#c05a2a"] };
+    if (month >= 5 && month <= 7) return { powder: false, colors: ["#5f8f45", "#6e9e4f", "#4f7a3b", "#7fa85a"] };
+    if (month >= 2 && month <= 4) return { powder: false, colors: ["#7fae5a", "#94bf6a", "#f1d3dc", "#f6e2e8", "#e9c1cf"] };
+    return { powder: true, colors: ["#eef4ff"] };
+  }
+
+  function leaf(anywhere) {
+    const s = season();
+    const color = s.colors[Math.floor(Math.random() * s.colors.length)];
     return {
-      len,
-      x: anywhere ? rand(-len, W) : W + rand(50, 700),
-      y: rand(80, H - 80),
-      v: rand(420, 650) + 500 * k,
-      amp: rand(6, 14) + 10 * k,
-      phase: rand(0, TAU),
+      // Bladene kommer inn fra høyre kant og blåser mot venstre.
+      ...(anywhere ? { x: rand(0, W), y: rand(0, H) } : { x: W + rand(30, 300), y: rand(-60, H * 0.85) }),
+      powder: s.powder,
+      petal: color.startsWith("#f"), // de lyse rosa er blomsterblader, ikke blader
+      color,
+      size: s.powder ? rand(1.3, 3) : rand(12, 22),
+      push: rand(0.75, 1.25),
+      rot: rand(0, TAU),
+      spin: rand(-2.5, 2.5),
+      flip: rand(0, TAU),
+      flipSpeed: rand(1.5, 4),
+      bob: rand(0, TAU),
+      bobSpeed: rand(0.6, 1.6),
+      bobAmp: rand(30, 90),
+    };
+  }
+
+  // En virvel er et lite vindkast som snurrer: et punkt som går i en krympende
+  // spiral mens det driver med vinden, og som etterlater et bånd som tones ut.
+  function twirl() {
+    return {
+      cx: rand(W * 0.15, W + 60),
+      cy: rand(80, H - 80),
+      r0: rand(40, 110),
+      a0: rand(0, TAU),
+      spin: rand(2.6, 4) * (Math.random() < 0.5 ? -1 : 1),
+      life: rand(2.6, 4.2),
+      age: rand(-2, 0), // forskjøvet start, så virvlene ikke kommer samtidig
+      trail: [],
     };
   }
 
@@ -280,28 +320,104 @@
     ctx.fill();
   }
 
-  function drawGusts(t, dt, k) {
-    const count = want.gusts(k);
-    topUp(pools.gusts, count, gust);
-    ctx.strokeStyle = `rgba(225, 235, 250, ${0.09 + 0.08 * k})`;
-    ctx.lineWidth = 1.6 + 1.2 * k;
-    for (let i = pools.gusts.length - 1; i >= 0; i--) {
-      const g = pools.gusts[i];
-      g.x -= (g.v + 15 * wind) * dt;
-      if (g.x + g.len < -100) {
-        if (pools.gusts.length > count) { pools.gusts.splice(i, 1); continue; }
-        Object.assign(g, gust(false));
+  // Bladform med spiss i begge ender, liggende langs x-aksen.
+  function leafPath(size) {
+    ctx.beginPath();
+    ctx.moveTo(-size, 0);
+    ctx.bezierCurveTo(-size * 0.4, -size * 0.55, size * 0.5, -size * 0.5, size, 0);
+    ctx.bezierCurveTo(size * 0.5, size * 0.5, -size * 0.4, size * 0.55, -size, 0);
+  }
+
+  function drawWind(t, dt, k) {
+    const powder = season().powder;
+    const count = powder ? want.powder(k) : want.leaves(k);
+    topUp(pools.leaves, count, leaf);
+    const powderFlakes = [];
+
+    for (let i = pools.leaves.length - 1; i >= 0; i--) {
+      const l = pools.leaves[i];
+      // Fokksnø er lettere og flyr fortere enn blader.
+      const speed = l.powder ? 80 + 30 * wind : 50 + 22 * wind;
+      l.x -= speed * l.push * dt;
+      l.y += (20 + Math.sin(t * l.bobSpeed + l.bob) * l.bobAmp) * dt;
+      l.rot += l.spin * (0.5 + wind / 16) * dt;
+      if (gone(l, 60)) {
+        if (pools.leaves.length > count) { pools.leaves.splice(i, 1); continue; }
+        Object.assign(l, leaf(false));
       }
-      ctx.beginPath();
-      for (let j = 0; j <= 24; j++) {
-        const p = j / 24;
-        const x = g.x + p * g.len;
-        const y = g.y + Math.sin(p * 6 + t * 3 + g.phase) * g.amp * Math.sin(p * Math.PI);
-        if (j) ctx.lineTo(x, y);
-        else ctx.moveTo(x, y);
+      if (l.powder) { powderFlakes.push(l); continue; }
+
+      // Bladet tumler: det roterer og vendes, så det ser ut som det snur seg i lufta.
+      const tumble = Math.cos(t * l.flipSpeed + l.flip);
+      ctx.save();
+      ctx.translate(l.x, l.y);
+      ctx.rotate(l.rot);
+      ctx.scale(1, Math.sign(tumble || 1) * Math.max(0.18, Math.abs(tumble)));
+      ctx.globalAlpha = 0.55 * Math.min(1, k * 1.6);
+      ctx.fillStyle = l.color;
+      if (l.petal) {
+        ctx.beginPath();
+        ctx.ellipse(0, 0, l.size * 0.7, l.size * 0.5, 0, 0, TAU);
+        ctx.fill();
+      } else {
+        leafPath(l.size);
+        ctx.fill();
+        // Midtribbe og stilk.
+        ctx.strokeStyle = "rgba(40, 25, 10, .35)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-l.size * 1.25, 0);
+        ctx.lineTo(l.size * 0.8, 0);
+        ctx.stroke();
       }
-      ctx.stroke();
+      ctx.restore();
     }
+
+    if (powderFlakes.length) {
+      ctx.fillStyle = "rgba(238, 244, 255, .6)";
+      ctx.beginPath();
+      for (const f of powderFlakes) {
+        ctx.moveTo(f.x + f.size, f.y);
+        ctx.arc(f.x, f.y, f.size, 0, TAU);
+      }
+      ctx.fill();
+    }
+
+    const twirls = want.twirls(k);
+    while (pools.twirls.length < twirls) pools.twirls.push(twirl());
+    ctx.strokeStyle = "rgb(225, 235, 250)";
+    ctx.lineCap = "round";
+    for (let i = pools.twirls.length - 1; i >= 0; i--) {
+      const tw = pools.twirls[i];
+      tw.age += dt;
+      if (tw.age < 0) continue;
+      if (tw.age > tw.life) {
+        if (pools.twirls.length > twirls) { pools.twirls.splice(i, 1); continue; }
+        Object.assign(tw, twirl(), { age: 0 });
+        continue;
+      }
+      tw.cx -= (40 + 14 * wind) * dt;
+      tw.cy -= 8 * dt;
+      const p = tw.age / tw.life;
+      const r = tw.r0 * (1 - 0.65 * p);
+      const a = tw.a0 + tw.spin * tw.age;
+      tw.trail.push([tw.cx + r * Math.cos(a), tw.cy + r * Math.sin(a) * 0.55]);
+      if (tw.trail.length > 40) tw.trail.shift();
+      // Båndet er tynt og svakt i halen og tykkere mot hodet, og hele virvelen
+      // tones inn og ut over levetiden.
+      const fade = Math.sin(Math.PI * p);
+      const n = tw.trail.length;
+      for (let j = 1; j < n; j++) {
+        const q = j / (n - 1);
+        ctx.globalAlpha = 0.42 * fade * q * Math.min(1, k * 1.6);
+        ctx.lineWidth = 1 + 3.4 * q;
+        ctx.beginPath();
+        ctx.moveTo(tw.trail[j - 1][0], tw.trail[j - 1][1]);
+        ctx.lineTo(tw.trail[j][0], tw.trail[j][1]);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 
   // Lynet er et svakt, dobbelt lysglimt med lang pause mellom, godt under
@@ -347,7 +463,7 @@
     if (level.clouds) drawClouds(dt, level.clouds);
     if (level.rain || pools.rain.length) drawRain(dt, level.rain);
     if (level.snow || pools.snow.length) drawSnow(t, dt, level.snow);
-    if (level.wind || pools.gusts.length) drawGusts(t, dt, level.wind);
+    if (level.wind || pools.leaves.length || pools.twirls.length) drawWind(t, dt, level.wind);
     if (level.lightning > 0.05 && !reduceMotion) drawLightning(t, dt, level.lightning);
     started = true;
   }
@@ -356,7 +472,7 @@
 
   const busy = () =>
     LAYERS.some(l => level[l] > 0 || (target.layers[l] || 0) > 0) ||
-    pools.rain.length > 0 || pools.snow.length > 0 || pools.gusts.length > 0;
+    pools.rain.length > 0 || pools.snow.length > 0 || pools.leaves.length > 0 || pools.twirls.length > 0;
 
   function loop(now) {
     const t = now / 1000;
@@ -371,7 +487,7 @@
     // Med redusert bevegelse vises ett stillbilde i stedet for animasjon.
     if (reduceMotion) {
       started = false;
-      for (const pool of ["rain", "snow", "gusts"]) pools[pool] = [];
+      for (const pool of ["rain", "snow", "leaves", "twirls"]) pools[pool] = [];
       draw(0, 0);
       return;
     }
@@ -385,8 +501,8 @@
 
   window.JpcAmbient = {
     // layers: { sun, stars, clouds, fog, rain, snow, lightning, wind } med styrke 0–1.
-    // wind: vind i m/s. Den styrer vinkelen på regn og snø og farten på skyer
-    // og vindstriper; alt blåser fra høyre mot venstre.
+    // wind: vind i m/s. Den styrer vinkelen på regn og snø og farten på skyer,
+    // blader og virvler; alt blåser fra høyre mot venstre.
     set(next) {
       const key = JSON.stringify(next);
       if (key === sceneKey) return;

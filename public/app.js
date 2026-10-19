@@ -340,7 +340,9 @@ function ambientFor({ current, nowcast }) {
   // Vindkast teller litt, så en byget dag med rolig middelvind også synes.
   // 8 m/s gir svak vind på skjermen, 16 m/s eller mer full styrke.
   const windy = Math.max(current.wind, (current.gust ?? 0) * 0.6);
-  if (windy >= 8) layers.wind = clampNum((windy - 6) / 10, 0.2, 1);
+  // Vind vises som blader og virvler bare når det er oppholdsvær. Med regn,
+  // snø eller sludd er det skrå nedbøren som viser at det blåser.
+  if (windy >= 8 && !layers.rain && !layers.snow) layers.wind = clampNum((windy - 6) / 10, 0.2, 1);
 
   // Vinden styrer vinkelen på regn og snø (se ambient.js), ikke retningen:
   // på skjermen blåser alt fra høyre mot venstre.
@@ -380,6 +382,8 @@ const AMBIENT_PREVIEW = (() => {
     if (name === "vind") windStrength = k;
     for (const [layer, v] of Object.entries(presets[name](k))) layers[layer] = Math.max(layers[layer] || 0, v);
   }
+  // Som for ekte vær: med nedbør er det vinkelen som viser vinden.
+  if (layers.rain || layers.snow) delete layers.wind;
   return {
     layers,
     // vind:1 er storm (24 m/s, nesten vannrett regn), vind:0.5 er 16 m/s.
