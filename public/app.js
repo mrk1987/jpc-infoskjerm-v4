@@ -530,12 +530,32 @@ function fitNews() {
   news.classList.remove("compact");
   if (news.getBoundingClientRect().height / currentScale < 300) news.classList.add("compact");
   document.querySelectorAll(".news-queue").forEach(trimQueue);
+  document.querySelectorAll(".news-stage .headline").forEach(fitHeadline);
 }
 
 const FEEDS = ["nrk", "digi"];
 
 // Køen fyller plassen under overskriften; saker som ikke får plass helt
 // fjernes i stedet for å bli kuttet midt i linja.
+// Overskriften skal alltid vises i sin helhet, aldri kuttes med «…». Blir
+// saken for høy, droppes ingressen først; får tittelen fortsatt ikke plass,
+// krymper den gradvis ned til 22 px.
+function fitHeadline(card) {
+  const stage = card.parentElement;
+  const title = card.querySelector("h3");
+  const summary = card.querySelector("p");
+  if (!stage || !title) return;
+  title.style.fontSize = "";
+  if (summary) summary.hidden = false;
+  const tooTall = () => card.scrollHeight > stage.clientHeight + 1;
+  if (summary && tooTall()) summary.hidden = true;
+  let size = parseFloat(getComputedStyle(title).fontSize);
+  while (tooTall() && size > 22) {
+    size -= 1;
+    title.style.fontSize = size + "px";
+  }
+}
+
 function trimQueue(queue) {
   const bottom = queue.getBoundingClientRect().bottom;
   [...queue.children].forEach(li => { if (li.getBoundingClientRect().bottom > bottom + 1) li.remove(); });
@@ -652,6 +672,8 @@ function tick() {
 }
 
 window.addEventListener("resize", fitScreen);
+// Webfonten kan komme etter første måling; mål overskriftene på nytt da.
+document.fonts?.ready.then(fitNews);
 fitScreen();
 tick();
 setTimeout(() => {

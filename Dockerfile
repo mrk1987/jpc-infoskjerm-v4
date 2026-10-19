@@ -1,7 +1,8 @@
 FROM node:22-alpine
 
 # Skjermen viser lokal tid; uten tzdata faller Node tilbake til UTC.
-RUN apk add --no-cache tzdata
+# curl brukes av Coolifys helsesjekk, som ellers feiler stille.
+RUN apk add --no-cache tzdata curl
 ENV TZ=Europe/Oslo \
     NODE_ENV=production \
     PORT=3000

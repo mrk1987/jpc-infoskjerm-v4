@@ -484,10 +484,6 @@ ol, ul { list-style: none; }
   line-height: 1.1;
   letter-spacing: -.01em;
   text-wrap: balance;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 .headline p {
   font-size: 23px;
@@ -519,13 +515,7 @@ ol, ul { list-style: none; }
 
 .news.compact .news-queue, .news.compact .headline p { display: none; }
 .news.compact .headline { gap: 4px; }
-.news.compact .headline h3 {
-  font-size: 30px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
+.news.compact .headline h3 { font-size: 30px; }
 
 .news-queue {
   flex: 1;
