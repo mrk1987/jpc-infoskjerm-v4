@@ -40,7 +40,7 @@ html, body {
 
 [hidden] { display: none !important; }
 h2, h3, p, ol, ul, dl, dd { margin: 0; padding: 0; }
-.clock, .wx-days, .wx-temp, .news-count, .time, .cnt { font-variant-numeric: tabular-nums; }
+.clock, .wx-days, .wx-temp, .time, .cnt { font-variant-numeric: tabular-nums; }
 ol, ul { list-style: none; }
 
 .stage {
@@ -519,7 +519,11 @@ ol, ul { list-style: none; }
   padding: 22px 26px 18px;
 }
 .news-col h2 { color: var(--text); font-weight: 700; }
-.news-count { font-size: 21px; color: var(--faint); font-weight: 600; }
+/* Liten QR-kode til saken som vises, øverst til høyre i kortet. Overskriften
+   «NRK»/«ITavisen» står øverst ved siden av den. */
+.news-col header { align-items: flex-start; }
+.news-qr { flex: none; width: 84px; height: 84px; }
+.news-qr svg { display: block; width: 100%; height: 100%; border-radius: 8px; }
 
 .news-stage {
   display: grid;

@@ -857,6 +857,7 @@ function showHeadline(feed, durationMs = NEWS_ROTATION_MS) {
   if (!items.length) {
     stage.replaceChildren(text("p", "", "Ingen saker tilgjengelig akkurat nå"));
     col.querySelector(".news-queue").replaceChildren();
+    col.querySelector(".news-qr").hidden = true;
     return;
   }
   const i = state.newsIndex[feed] % items.length;
@@ -880,7 +881,10 @@ function showHeadline(feed, durationMs = NEWS_ROTATION_MS) {
     setTimeout(() => old.remove(), 700);
   }
 
-  col.querySelector(".news-count").textContent = `${i + 1} av ${items.length}`;
+  // Liten QR-kode til saken som vises, så den kan skannes rett fra tavla.
+  const qr = col.querySelector(".news-qr");
+  qr.innerHTML = qrSvg(item.link, "L");
+  qr.hidden = !qr.innerHTML;
 
   const queue = col.querySelector(".news-queue");
   queue.replaceChildren();
@@ -1318,10 +1322,12 @@ function renderLunchPanel(body, now = new Date()) {
 
 // QR-koden lar folk ta med seg saken på mobilen. Skjermen selv navigerer
 // aldri bort, ellers ville den bli stående på en nettavis.
-function qrSvg(url) {
+// level: feilkorrigering. «L» gir færre og større ruter, som skannes lettere
+// når koden er liten, som i hjørnet av nyhetskortene.
+function qrSvg(url, level = "M") {
   if (!url || typeof window.qrcode !== "function") return "";
   try {
-    const qr = window.qrcode(0, "M");
+    const qr = window.qrcode(0, level);
     qr.addData(url);
     qr.make();
     const n = qr.getModuleCount();

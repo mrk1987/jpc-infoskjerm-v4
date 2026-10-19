@@ -17,7 +17,7 @@ avgangstavle i LED-stil. Etterfølger av
 - **Været fra Yr (MET Norge)**: graf for neste 24 timer med temperatur, nedbør, natt og ikoner
   hver tredje time. Kommer det regn i løpet av halvannen time, står det under temperaturen
   («Regn om 15 min»), basert på METs radarbaserte korttidsvarsel (Nowcast).
-- **Nyheter i to kolonner**, NRK til venstre og ITavisen til høyre. Hver kolonne viser én sak om gangen med ingress, og resten av plassen fylles med de neste sakene. Kolonnene bytter sak forskjøvet med seks sekunder.
+- **Nyheter i to kolonner**, NRK til venstre og ITavisen til høyre. Hver kolonne viser én sak om gangen med ingress og en liten QR-kode til saken øverst til høyre, og resten av plassen fylles med de neste sakene. Kolonnene bytter sak forskjøvet med seks sekunder.
 - **Lunsj bytter til neste arbeidsdag** etter servering, og hopper over helg og helligdager.
 - **Nedtelling nederst.** Er det satt en JPC-nedtelling i `config.js` som ikke har passert, vises
   den. Ellers telles det ned til neste røde dag (norske helligdager, de samme som på
