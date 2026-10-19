@@ -576,12 +576,18 @@ function showHeadline(feed, durationMs = NEWS_ROTATION_MS) {
   const card = el("article", "headline");
   card.append(text("span", "time", newsTime(item.published)), text("h3", "", item.title));
   if (item.summary) card.append(text("p", "", item.summary));
-  const old = stage.querySelector(".headline.on");
+  // Alle tidligere saker fases ut, ikke bare den synlige. requestAnimationFrame
+  // stopper i bakgrunnsfaner, så tidligere ble saker liggende uten «on» og
+  // hopet seg opp oppå hverandre.
+  stage.querySelectorAll(":scope > .headline.leaving").forEach(n => n.remove());
   stage.querySelectorAll(":scope > :not(.headline)").forEach(n => n.remove());
+  const previous = [...stage.querySelectorAll(":scope > .headline")];
   stage.append(card);
-  requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add("on")));
-  if (old) {
+  void card.offsetWidth; // tving layout så overgangen starter fra skjult tilstand
+  card.classList.add("on");
+  for (const old of previous) {
     old.classList.remove("on");
+    old.classList.add("leaving");
     setTimeout(() => old.remove(), 700);
   }
 
