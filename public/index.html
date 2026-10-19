@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>JPC Skullerud</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Doto:wght@600;800;900&family=Schibsted+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="stage" id="stage">
+  <main class="screen" id="screen">
+
+    <header class="masthead">
+      <div class="brand">
+        <span class="wordmark">JPC</span>
+        <span class="place">Skullerud</span>
+      </div>
+      <div class="timebox">
+        <div class="clock"><span id="clock-hm">--:--</span><span class="sec" id="clock-s">--</span></div>
+        <div class="date" id="date">&nbsp;</div>
+      </div>
+    </header>
+
+    <section class="board" id="board" aria-label="T-baneavganger fra Skullerud">
+      <div class="board-head">
+        <h2>T-bane fra Skullerud</h2>
+        <span class="health" id="health"><i></i><span id="health-label">Kobler til</span></span>
+      </div>
+      <div class="board-cols">
+        <div class="dir" id="dir-sentrum">
+          <h3>Mot sentrum</h3>
+          <div class="next" data-slot="next"></div>
+          <ol class="later" data-slot="later"></ol>
+        </div>
+        <div class="dir" id="dir-mortensrud">
+          <h3>Mot Mortensrud</h3>
+          <div class="next" data-slot="next"></div>
+          <ol class="later" data-slot="later"></ol>
+        </div>
+      </div>
+      <div class="board-ticker" id="ticker" hidden><span id="ticker-text"></span></div>
+    </section>
+
+    <section class="weather" id="weather" aria-label="Været på Skullerud">
+      <div class="wx-now">
+        <div class="wx-icon" id="wx-icon"></div>
+        <div class="wx-temp" id="wx-temp">--°</div>
+        <div class="wx-text">
+          <p class="wx-cond" id="wx-cond">Henter været</p>
+          <p class="wx-meta" id="wx-meta"></p>
+        </div>
+      </div>
+      <dl class="wx-days" id="wx-days"></dl>
+      <svg class="wx-chart" id="wx-chart" viewBox="0 0 952 170" aria-hidden="true"></svg>
+    </section>
+
+    <section class="midrow" id="midrow">
+      <article class="lunch" id="lunch">
+        <header>
+          <h2 id="lunch-heading">Lunsj i dag</h2>
+          <span class="pill" id="lunch-status"></span>
+        </header>
+        <p class="dish" id="lunch-dish">Henter menyen</p>
+        <p class="dish-sub" id="lunch-sub"></p>
+        <p class="allergens" id="lunch-aller"></p>
+        <p class="tomorrow"><span id="lunch-next-label"></span> <b id="lunch-next"></b></p>
+      </article>
+      <article class="poll" id="poll" hidden>
+        <header>
+          <h2>Kontoravstemning</h2>
+          <span class="pill" id="poll-status"></span>
+        </header>
+        <p class="question" id="poll-question"></p>
+        <ul class="options" id="poll-options"></ul>
+      </article>
+    </section>
+
+    <aside class="notice" id="notice" hidden>
+      <span class="notice-tag" id="notice-tag"></span>
+      <p class="notice-msg" id="notice-msg"></p>
+    </aside>
+
+    <section class="news" id="news" aria-label="Siste nytt fra NRK">
+      <header>
+        <h2>Siste nytt fra NRK</h2>
+        <span class="news-count" id="news-count"></span>
+      </header>
+      <div class="news-stage" id="news-stage"></div>
+      <div class="news-progress"><i id="news-progress"></i></div>
+      <ol class="news-queue" id="news-queue"></ol>
+    </section>
+
+    <footer class="countdown" id="countdown" hidden>
+      <p class="cd-label" id="cd-label"></p>
+      <div class="cd-digits" id="cd-digits"></div>
+    </footer>
+
+  </main>
+</div>
+<script src="app.js" type="module"></script>
+</body>
+</html>
