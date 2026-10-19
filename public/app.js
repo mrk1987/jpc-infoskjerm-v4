@@ -1,4 +1,4 @@
-// JPC Skullerud infoskjerm v4 — klient.
+// JPC Skullerud infoskjerm v5 — klient.
 // All henting går via serverens /api/*, som cacher og normaliserer kildene.
 
 const REFRESH = {
@@ -55,6 +55,7 @@ function fitScreen() {
 /* ---------- Henting med lokal reserve ---------- */
 
 async function getJson(path, source) {
+  // Nøkkelen beholdt fra v4, så den lokale reservekopien overlever oppgraderingen.
   const key = "jpc-v4-" + source;
   try {
     const response = await fetch(path, { cache: "no-store" });

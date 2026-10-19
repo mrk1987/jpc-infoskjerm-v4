@@ -1,4 +1,4 @@
-// JPC Skullerud infoskjerm v4: værbakgrunn.
+// JPC Skullerud infoskjerm v5: værbakgrunn.
 //
 // Rolige animasjoner bak panelene som speiler været ute: sol, stjerner,
 // skyer, tåke, regn, sludd, snø, torden og vind. Vind uten nedbør er blader

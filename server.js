@@ -1,4 +1,4 @@
-// JPC Skullerud infoskjerm v4: statisk frontend + et lite API som henter,
+// JPC Skullerud infoskjerm v5: statisk frontend + et lite API som henter,
 // normaliserer og cacher alle datakilder på serversiden.
 //
 // Ingen npm-avhengigheter. Krever Node 22+ (global fetch) og TZ=Europe/Oslo.
@@ -13,7 +13,7 @@ const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = join(fileURLToPath(new URL(".", import.meta.url)), "public");
 
 // Kontorinnholdet (meny, avstemning, beskjed, nedtelling) redigeres fortsatt i
-// originalrepoet via Claude-prosjektet. v4 leser derfra, så arbeidsflyten til
+// originalrepoet via Claude-prosjektet. Skjermen leser derfra, så arbeidsflyten til
 // kollegaene er uendret.
 const CONTENT_REPO = process.env.CONTENT_REPO || "KrakenSaten/jpc-infoskjerm";
 const CONTENT_BRANCH = process.env.CONTENT_BRANCH || "main";
@@ -27,7 +27,7 @@ const NEWS_FEEDS = {
   itavisen: "https://itavisen.no/feed/",
 };
 // MET Norge krever en User-Agent som sier hvem vi er og hvor vi kan nås.
-const UA = "jpc-infoskjerm/4 (kontorskjerm JPC Skullerud; github.com/mrk1987/jpc-infoskjerm-v4)";
+const UA = "jpc-infoskjerm/5 (kontorskjerm JPC Skullerud; github.com/mrk1987/jpc-infoskjerm-v4)";
 
 /* ---------- Cache: siste gode verdi overlever feil ---------- */
 
@@ -906,5 +906,5 @@ createServer(async (req, res) => {
 }).listen(PORT, async () => {
   await scrapeIntranetMenu("oppstart");
   scheduleIntranetScrape();
-  console.log(`infoskjerm v4 (${VERSION}) lytter på :${PORT}, innhold fra ${CONTENT_REPO}@${CONTENT_BRANCH}`);
+  console.log(`infoskjerm v5 (${VERSION}) lytter på :${PORT}, innhold fra ${CONTENT_REPO}@${CONTENT_BRANCH}`);
 });

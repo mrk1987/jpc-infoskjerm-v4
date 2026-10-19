@@ -1,4 +1,4 @@
-# JPC Skullerud infoskjerm v4
+# JPC Skullerud infoskjerm v5
 
 Kioskskjerm for JPC-kontoret på Skullerud, bygget på nytt med mørkt kontrollrom-design og en
 avgangstavle i LED-stil. Etterfølger av
@@ -6,7 +6,27 @@ avgangstavle i LED-stil. Etterfølger av
 
 **Live:** https://infoskjerm.kokkinos.no (Coolify, VM 201)
 
-## Hva er nytt i v4
+## Hva er nytt i v5
+
+Bygget for en Samsung Flip med berøring i gangen, drevet av en Windows 11-PC med Edge i kioskmodus.
+
+- **Trykk for mer:** T-bane (med buss), vær, lunsj og nyheter løftes ut som vinduer med mer
+  innhold, og lukker seg selv etter 3 minutter uten berøring.
+- **Vær fra Yr (MET Norge)** med radarbasert korttidsvarsel («Regn om 15 min») og animert
+  nedbørsradar i værvinduet.
+- **Værbakgrunn** som følger Yrs tall: sol, stjerner, skyer, tåke, regn, sludd, snø og torden med
+  reell intensitet, skrått regn og snø i vind, blader og virvler når det bare blåser, og rim på
+  ruta i bitende kulde.
+- **ITavisen** i stedet for digi.no, med hele saker; liten QR-kode til saken i hvert nyhetskort,
+  og saker i lista kan trykkes for å vises i kortet.
+- **Nedtelling til neste røde dag eller fridag** med langhelger og inneklemte dager, når JPC ikke
+  har noe annet på agendaen. Julaften og nyttårsaften er fridager hos JPC.
+- **Fyller hele skjermens høyde** uansett format, uten å strekke bredden.
+- Symmetrisk avgangstavle og nyheter på egne kort.
+
+Repoet heter fortsatt `jpc-infoskjerm-v4` fordi Coolify bygger fra det navnet.
+
+## Hva var nytt i v4
 
 - **Server i stedet for ren nettleserapp.** En liten Node-server (null npm-avhengigheter) henter
   Entur, MET Norge (Yr), NRK, ITavisen og kontorfilene, cacher dem og leverer ferdige JSON-svar. Skjermen

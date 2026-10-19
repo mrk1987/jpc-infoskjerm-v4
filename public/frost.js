@@ -1,4 +1,4 @@
-// JPC Skullerud infoskjerm v4: rim på ruta.
+// JPC Skullerud infoskjerm v5: rim på ruta.
 //
 // I bitende kulde kryper rimbregner inn fra kantene av skjermen, som på et
 // vindu. frost.webp er en ferdig rimramme i skjermens format, laget med
