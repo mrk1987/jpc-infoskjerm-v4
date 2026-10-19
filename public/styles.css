@@ -44,14 +44,16 @@ ol, ul { list-style: none; }
 .stage {
   position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
 }
 
+/* Lerretet er større enn de fleste vinduer, så det sentreres med absolutt
+   posisjon; grid-sentrering legger et for stort element i hjørnet. */
 .screen {
+  position: absolute;
+  left: 50%;
+  top: 50%;
   width: 1080px;
   height: 1920px;
-  flex: none;
   transform-origin: center center;
   background:
     radial-gradient(120% 60% at 50% 0%, #13213a 0%, transparent 60%),
@@ -60,7 +62,6 @@ ol, ul { list-style: none; }
   display: flex;
   flex-direction: column;
   gap: 22px;
-  position: relative;
   overflow: hidden;
 }
 

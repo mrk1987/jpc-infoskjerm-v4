@@ -31,7 +31,7 @@ let currentScale = 1;
 
 function fitScreen() {
   const scale = Math.min(window.innerWidth / 1080, window.innerHeight / 1920);
-  $("screen").style.transform = `scale(${scale})`;
+  $("screen").style.transform = `translate(-50%, -50%) scale(${scale})`;
   currentScale = scale;
 }
 
