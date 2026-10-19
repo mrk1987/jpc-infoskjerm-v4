@@ -833,9 +833,33 @@ function newsTime(ms) {
 function fitNews() {
   const news = $("news");
   news.classList.remove("compact");
+  document.querySelectorAll(".news-stage").forEach(stage => {
+    stage.style.flexBasis = "";
+    stage.style.removeProperty("--clamp");
+  });
   if (news.getBoundingClientRect().height / currentScale < 300) news.classList.add("compact");
   document.querySelectorAll(".news-queue").forEach(trimQueue);
+  document.querySelectorAll(".news-col").forEach(growStage);
   document.querySelectorAll(".news-stage .headline").forEach(fitHeadline);
+}
+
+// På svært høye skjermer kan alle sakene få plass i lista med plass til
+// overs. Da får hovedsaken den ledige høyden og viser flere linjer ingress,
+// i stedet for at kortet ender i et tomt felt.
+const STAGE_H = 236;
+const SUMMARY_LINE_H = 32;
+function growStage(col) {
+  if ($("news").classList.contains("compact")) return;
+  const queue = col.querySelector(".news-queue");
+  const items = state.news[col.dataset.feed] || [];
+  // Er lista kuttet, er det ingen ledig plass å gi bort.
+  if (!items.length || queue.children.length < items.length - 1) return;
+  const used = queue.lastElementChild?.getBoundingClientRect().bottom ?? queue.getBoundingClientRect().top;
+  const spare = (queue.getBoundingClientRect().bottom - used) / currentScale;
+  if (spare < SUMMARY_LINE_H) return;
+  const stage = col.querySelector(".news-stage");
+  stage.style.flexBasis = STAGE_H + spare + "px";
+  stage.style.setProperty("--clamp", 2 + Math.floor(spare / SUMMARY_LINE_H));
 }
 
 const FEEDS = ["nrk", "itavisen"];
@@ -881,7 +905,11 @@ function showHeadline(feed, durationMs = NEWS_ROTATION_MS) {
 
   const card = el("article", "headline");
   card.append(text("span", "time", newsTime(item.published)), text("h3", "", item.title));
-  if (item.summary) card.append(text("p", "", item.summary));
+  // Ingressen etterfølges av resten av saken (ITavisen sender hele teksten).
+  // Normalt vises bare to linjer; på høye skjermer får den flere (growStage).
+  const body = [item.summary, ...(item.paragraphs || []).filter(p => !p.heading && p.text !== item.summary).map(p => p.text)]
+    .filter(Boolean).join(" ");
+  if (body) card.append(text("p", "", body));
   // Alle tidligere saker fases ut, ikke bare den synlige. requestAnimationFrame
   // stopper i bakgrunnsfaner, så tidligere ble saker liggende uten «on» og
   // hopet seg opp oppå hverandre.
@@ -902,12 +930,15 @@ function showHeadline(feed, durationMs = NEWS_ROTATION_MS) {
   qr.innerHTML = qrSvg(item.link, "L");
   qr.hidden = !qr.innerHTML;
 
+  // Alle de andre sakene legges i lista; trimQueue (via fitNews) fjerner
+  // dem som ikke får plass, så høye skjermer får vist flere.
   const queue = col.querySelector(".news-queue");
   queue.replaceChildren();
-  for (let k = 1; k <= 8 && k < items.length; k++) {
-    const next = items[(i + k) % items.length];
+  for (let k = 1; k < items.length; k++) {
+    const index = (i + k) % items.length;
     const li = el("li");
-    li.append(text("span", "time", newsTime(next.published)), text("span", "t", next.title));
+    li.dataset.index = index;
+    li.append(text("span", "time", newsTime(items[index].published)), text("span", "t", items[index].title));
     queue.append(li);
   }
 
@@ -922,6 +953,31 @@ function showHeadline(feed, durationMs = NEWS_ROTATION_MS) {
 function rotateNews(feed) {
   state.newsIndex[feed]++;
   showHeadline(feed);
+}
+
+// Hver kolonne bytter sak på sin egen klokke. Den startes på nytt når noen
+// velger en sak i lista, så den valgte saken får stå en hel periode.
+const rotationTimers = {};
+function restartRotation(feed, delay = NEWS_ROTATION_MS) {
+  clearTimeout(rotationTimers[feed]);
+  clearInterval(rotationTimers[feed]);
+  rotationTimers[feed] = setTimeout(() => {
+    rotateNews(feed);
+    rotationTimers[feed] = setInterval(() => rotateNews(feed), NEWS_ROTATION_MS);
+  }, delay);
+}
+
+// Trykk på en sak i lista gjør den til hovedsaken i kortet, i stedet for å
+// åpne det store vinduet (det gjør et trykk på selve saken fortsatt).
+for (const feed of FEEDS) {
+  document.querySelector(`.news-col[data-feed="${feed}"] .news-queue`).addEventListener("click", event => {
+    const li = event.target.closest("li[data-index]");
+    if (!li) return;
+    event.stopPropagation();
+    state.newsIndex[feed] = Number(li.dataset.index);
+    showHeadline(feed);
+    restartRotation(feed);
+  });
 }
 
 async function loadNews() {
@@ -1554,7 +1610,7 @@ setInterval(loadOffice, REFRESH.office);
 setInterval(checkVersion, REFRESH.version);
 // Kolonnene bytter sak forskjøvet med en halv periode, så ikke alt på
 // skjermen beveger seg samtidig.
-setInterval(() => rotateNews("nrk"), NEWS_ROTATION_MS);
-setTimeout(() => setInterval(() => rotateNews("itavisen"), NEWS_ROTATION_MS), NEWS_ROTATION_MS / 2);
+restartRotation("nrk");
+restartRotation("itavisen", NEWS_ROTATION_MS * 1.5);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshAll(); });
 scheduleNightlyReload();

@@ -459,7 +459,9 @@ async function loadFeed(url) {
     })
     .filter(item => item.title && !isAdvert(item.title))
     .sort((a, b) => b.published - a.published)
-    .slice(0, 12);
+    // Alt strømmen har (NRK og ITavisen sender ~20): på høye skjermer fylles
+    // lista under saken med så mange som får plass.
+    .slice(0, 30);
   if (!items.length) throw new Error("Tom RSS-strøm");
   return { items };
 }
