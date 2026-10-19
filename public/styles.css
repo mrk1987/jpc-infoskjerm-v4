@@ -491,15 +491,19 @@ ol, ul { list-style: none; }
   min-height: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 44px;
+  gap: 24px;
 }
+/* Hver kolonne er et kort med egen bakgrunn, som lunsjpanelet, så nyhetene
+   ikke drukner i værbakgrunnen eller rimet. */
 .news-col {
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  background: var(--deck);
+  border-radius: 24px;
+  padding: 22px 26px 18px;
 }
-.news-col + .news-col { border-left: 2px solid var(--rule); padding-left: 44px; margin-left: -22px; }
 .news-col h2 { color: var(--text); font-weight: 700; }
 .news-count { font-size: 21px; color: var(--faint); font-weight: 600; }
 
