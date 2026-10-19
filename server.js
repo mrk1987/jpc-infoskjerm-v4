@@ -457,10 +457,16 @@ async function serveStatic(pathname, res) {
   const rel = normalize(pathname === "/" ? "/index.html" : pathname).replace(/^([/\\])+/, "");
   if (rel.startsWith("..")) return send(res, 400, "Ugyldig sti");
   try {
-    const body = await readFile(join(PUBLIC_DIR, rel));
+    let body = await readFile(join(PUBLIC_DIR, rel));
     const type = MIME[extname(rel)] || "application/octet-stream";
-    // HTML hentes alltid ferskt; assets lastes uansett på nytt via versjonssjekken.
-    const cacheControl = type.startsWith("text/html") ? "no-cache" : "public, max-age=300";
+    const isHtml = type.startsWith("text/html");
+    // Cloudflare cacher JS/CSS i 4 timer uansett hva vi sender. Versjonen i
+    // asset-URL-ene gjør at en ny deploy alltid gir nye URL-er, mens HTML-en
+    // (som Cloudflare ikke cacher) hentes ferskt.
+    if (isHtml) {
+      body = body.toString("utf8").replace(/(href|src)="([\w-]+\.(?:css|js|svg))"/g, `$1="$2?v=${VERSION}"`);
+    }
+    const cacheControl = isHtml ? "no-cache" : "public, max-age=31536000, immutable";
     send(res, 200, body, { "Content-Type": type, "Cache-Control": cacheControl });
   } catch {
     send(res, 404, "Finnes ikke", { "Content-Type": "text/plain; charset=utf-8" });
