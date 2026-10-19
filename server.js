@@ -26,7 +26,8 @@ const NEWS_FEEDS = {
   // ITavisen er gratis og har hele saken i strømmen.
   itavisen: "https://itavisen.no/feed/",
 };
-const UA = "jpc-infoskjerm/4 (kontorskjerm Skullerud)";
+// MET Norge krever en User-Agent som sier hvem vi er og hvor vi kan nås.
+const UA = "jpc-infoskjerm/4 (kontorskjerm JPC Skullerud; github.com/mrk1987/jpc-infoskjerm-v4)";
 
 /* ---------- Cache: siste gode verdi overlever feil ---------- */
 
@@ -143,77 +144,233 @@ async function loadDepartures() {
   return { departures, situations };
 }
 
-/* ---------- Vær (Open-Meteo) ---------- */
+/* ---------- Vær (Yr / MET Norge) ---------- */
 
-function osloHour(unixSeconds) {
-  return Number(new Date(unixSeconds * 1000).toLocaleString("en-GB", {
-    timeZone: "Europe/Oslo", hour: "2-digit", hour12: false,
-  })) % 24;
+// Locationforecast er samme prognose som yr.no viser, og Nowcast gir
+// radarbasert nedbør for de neste 90 minuttene. Dataene er lisensiert
+// CC BY 4.0 og krediteres i værvinduet. MET krever at vi identifiserer oss
+// i User-Agent, maks fire desimaler i koordinatene og at vi bruker
+// If-Modified-Since i stedet for å hente hele svaret hver gang.
+const MET_BASE = "https://api.met.no/weatherapi";
+const MET_LAT = COORDS.latitude.toFixed(4);
+const MET_LON = COORDS.longitude.toFixed(4);
+const metCache = new Map();
+
+async function metFetch(path) {
+  const url = `${MET_BASE}/${path}?lat=${MET_LAT}&lon=${MET_LON}`;
+  const previous = metCache.get(url);
+  const response = await fetch(url, {
+    headers: { "User-Agent": UA, ...(previous && { "If-Modified-Since": previous.lastModified }) },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (response.status === 304 && previous) return previous.body;
+  if (!response.ok) throw new Error(`HTTP ${response.status} fra api.met.no`);
+  const body = await response.json();
+  const lastModified = response.headers.get("last-modified");
+  if (lastModified) metCache.set(url, { lastModified, body });
+  return body;
+}
+
+function osloParts(ms) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Oslo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hour12: false,
+  }).formatToParts(new Date(ms)).map(p => [p.type, p.value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) % 24 };
+}
+
+// Soloppgang og solnedgang regnet ut lokalt med solposisjonsligningen
+// (nøyaktig til et par minutter). Brukes til dag/natt i ikonene og grafen.
+function sunTimes(dateKey) {
+  const rad = Math.PI / 180;
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const n = Date.UTC(y, m - 1, d, 12) / 86_400_000 + 2440587.5 - 2451545;
+  const jStar = n - COORDS.longitude / 360;
+  const M = (357.5291 + 0.98560028 * jStar) % 360;
+  const C = 1.9148 * Math.sin(M * rad) + 0.02 * Math.sin(2 * M * rad) + 0.0003 * Math.sin(3 * M * rad);
+  const lambda = (M + C + 180 + 102.9372) % 360;
+  const transit = 2451545 + jStar + 0.0053 * Math.sin(M * rad) - 0.0069 * Math.sin(2 * lambda * rad);
+  const decl = Math.asin(Math.sin(lambda * rad) * Math.sin(23.4397 * rad));
+  const lat = COORDS.latitude * rad;
+  const cosW = (Math.sin(-0.833 * rad) - Math.sin(lat) * Math.sin(decl)) / (Math.cos(lat) * Math.cos(decl));
+  if (cosW > 1) return { sunrise: null, sunset: null, up: false };
+  if (cosW < -1) return { sunrise: null, sunset: null, up: true };
+  const w = Math.acos(cosW) / rad / 360;
+  const toMs = jd => Math.round((jd - 2440587.5) * 86_400_000);
+  return { sunrise: toMs(transit - w), sunset: toMs(transit + w) };
+}
+
+function isDaylight(ms) {
+  const sun = sunTimes(osloParts(ms).date);
+  if (sun.sunrise === null) return sun.up;
+  return ms >= sun.sunrise && ms < sun.sunset;
+}
+
+// METs symbolkoder oversettes til WMO-koder, som ikonene på skjermen
+// bygger på, og til samme ordlyd som Yr bruker.
+const MET_FIXED = {
+  clearsky: [0, "Klarvær"], fair: [1, "Lettskyet"], partlycloudy: [2, "Delvis skyet"],
+  cloudy: [3, "Skyet"], fog: [45, "Tåke"],
+};
+
+function metSymbol(symbol) {
+  const base = String(symbol || "").replace(/_(day|night|polartwilight)$/, "");
+  if (MET_FIXED[base]) return { code: MET_FIXED[base][0], text: MET_FIXED[base][1] };
+  const match = base.match(/^(light|heavy)?(rain|sleet|snow)(showers)?(andthunder)?$/);
+  if (!match) return { code: 3, text: "" };
+  const [, level, kind, showers, thunder] = match;
+  const i = level === "light" ? 0 : level === "heavy" ? 2 : 1;
+  const codes = {
+    rain: showers ? [80, 81, 82] : [61, 63, 65],
+    sleet: [66, 67, 67],
+    snow: showers ? [85, 85, 86] : [71, 73, 75],
+  };
+  const nouns = { rain: "regn", sleet: "sludd", snow: "snø" };
+  const prefix = showers ? ["Lette ", "", "Kraftige "][i] : ["Lett ", "", "Kraftig "][i];
+  let text = prefix + nouns[kind] + (showers ? "byger" : "");
+  text = text[0].toUpperCase() + text.slice(1);
+  return thunder ? { code: 95, text: text + " og torden" } : { code: codes[kind][i], text };
+}
+
+function mostCommon(values, fallback) {
+  const counts = new Map();
+  for (const v of values) counts.set(v, (counts.get(v) || 0) + 1);
+  let best = fallback, bestCount = 0;
+  for (const [v, count] of counts) if (count > bestCount) { best = v; bestCount = count; }
+  return best;
+}
+
+// Radarbildet (animert GIF, ~3,5 MB) hentes fra MET og caches til det
+// utløper, så skjermene deler én kopi. Ruten har ingen filendelse fordi
+// Cloudflare cacher .gif i fire timer uansett hva vi svarer.
+const RADAR_URL = `${MET_BASE}/radar/2.0/?area=southeastern_norway&type=5level_reflectivity&content=`;
+const radar = { body: null, type: "", until: 0, pending: null };
+
+async function loadRadar() {
+  if (radar.body && Date.now() < radar.until) return radar;
+  if (radar.pending) return radar.pending;
+  radar.pending = (async () => {
+    try {
+      for (const content of ["animation", "image"]) {
+        try {
+          const response = await fetchWithTimeout(RADAR_URL + content, {}, 20_000);
+          radar.body = Buffer.from(await response.arrayBuffer());
+          radar.type = (response.headers.get("content-type") || "image/gif").split(";")[0];
+          const expires = Date.parse(response.headers.get("expires") || "");
+          radar.until = Math.max(Date.now() + 2 * 60_000, Number.isNaN(expires) ? 0 : expires);
+          return radar;
+        } catch (error) {
+          console.warn(`[radar] ${content}: ${error.message}`);
+        }
+      }
+      // Siste gode bilde er bedre enn ingenting; prøv igjen om et minutt.
+      if (radar.body) { radar.until = Date.now() + 60_000; return radar; }
+      throw new Error("radarbildet kunne ikke hentes");
+    } finally {
+      radar.pending = null;
+    }
+  })();
+  return radar.pending;
+}
+
+function summarizeNowcast(body) {
+  const points = (body?.properties?.timeseries || []).map(e => ({
+    t: Date.parse(e.time),
+    rate: e.data?.instant?.details?.precipitation_rate ?? 0,
+  }));
+  return { radar: body?.properties?.meta?.radar_coverage === "ok", points };
 }
 
 async function loadWeather() {
-  const query = new URLSearchParams({
-    latitude: String(COORDS.latitude),
-    longitude: String(COORDS.longitude),
-    current: "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,precipitation,is_day",
-    hourly: "temperature_2m,precipitation,weather_code,is_day",
-    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset",
-    timezone: "Europe/Oslo",
-    timeformat: "unixtime",
-    forecast_days: "7",
-    wind_speed_unit: "ms",
-  });
-  const response = await fetchWithTimeout("https://api.open-meteo.com/v1/forecast?" + query);
-  const p = await response.json();
-  if (!p?.daily?.time?.length || !p?.hourly?.time?.length) throw new Error("Mangler prognose");
+  const [forecast, nowcast] = await Promise.allSettled([
+    metFetch("locationforecast/2.0/complete"),
+    metFetch("nowcast/2.0/complete"),
+  ]);
+  if (forecast.status !== "fulfilled") throw forecast.reason;
+  const series = forecast.value?.properties?.timeseries || [];
+  if (!series.length) throw new Error("Mangler prognose fra MET");
 
-  const hourly = p.hourly.time.map((t, i) => ({
-    t: t * 1000,
-    temp: p.hourly.temperature_2m[i],
-    rain: p.hourly.precipitation[i],
-    code: p.hourly.weather_code[i],
-    day: p.hourly.is_day[i] === 1,
+  const entries = series.map((e, i) => ({
+    t: Date.parse(e.time),
+    data: e.data,
+    step: i + 1 < series.length ? Date.parse(series[i + 1].time) - Date.parse(e.time) : 6 * 3_600_000,
   }));
 
-  // daily.weather_code er dagens verste kode: én time med yr gir regn hele
-  // dagen. Bruk den vanligste koden mellom 08 og 18 i stedet.
-  const dominantCode = (dayStart, fallback) => {
-    const counts = new Map();
-    for (const h of hourly) {
-      if (h.t < dayStart || h.t >= dayStart + 86_400_000) continue;
-      const hr = osloHour(h.t / 1000);
-      if (hr < 8 || hr > 18) continue;
-      counts.set(h.code, (counts.get(h.code) || 0) + 1);
+  // Timeverdier finnes for de første ~2,5 døgnene, deretter seks timers steg.
+  const hourly = entries
+    .filter(e => e.step <= 3_600_000 && e.data.next_1_hours)
+    .map(e => ({
+      t: e.t,
+      temp: e.data.instant.details.air_temperature,
+      rain: e.data.next_1_hours.details?.precipitation_amount ?? 0,
+      code: metSymbol(e.data.next_1_hours.summary?.symbol_code).code,
+      day: isDaylight(e.t + 1_800_000),
+    }));
+
+  // Døgnverdier for sju dager. Dagens symbol er det vanligste mellom 08 og
+  // 18, ikke det verste, så én time med yr ikke gjør hele dagen til regn.
+  const days = new Map();
+  for (const e of entries) {
+    const { date, hour } = osloParts(e.t);
+    const day = days.get(date) || { date, temps: [], rain: 0, chance: null, wind: 0, codes: [] };
+    const instant = e.data.instant.details;
+    day.temps.push(instant.air_temperature);
+    day.wind = Math.max(day.wind, instant.wind_speed ?? 0);
+    const hourlyStep = e.step <= 3_600_000;
+    const period = hourlyStep ? e.data.next_1_hours : e.data.next_6_hours;
+    if (period) {
+      day.rain += period.details?.precipitation_amount ?? 0;
+      const chance = period.details?.probability_of_precipitation;
+      if (chance != null) day.chance = Math.max(day.chance ?? 0, chance);
+      if (!hourlyStep) day.temps.push(period.details?.air_temperature_max, period.details?.air_temperature_min);
+      const daytime = hourlyStep ? hour >= 8 && hour <= 18 : hour >= 6 && hour <= 15;
+      if (daytime) day.codes.push(metSymbol(period.summary?.symbol_code).code);
     }
-    let best = fallback, bestCount = 0;
-    for (const [code, count] of counts) if (count > bestCount) { best = code; bestCount = count; }
-    return best;
-  };
+    days.set(date, day);
+  }
 
-  const days = p.daily.time.map((t, i) => ({
-    date: t * 1000,
-    code: dominantCode(t * 1000, p.daily.weather_code[i]),
-    max: p.daily.temperature_2m_max[i],
-    min: p.daily.temperature_2m_min[i],
-    rain: p.daily.precipitation_sum[i],
-    rainChance: p.daily.precipitation_probability_max?.[i] ?? null,
-    wind: p.daily.wind_speed_10m_max[i],
-    sunrise: p.daily.sunrise[i] * 1000,
-    sunset: p.daily.sunset[i] * 1000,
-  }));
+  const dayList = [...days.values()].slice(0, 7).map(d => {
+    const temps = d.temps.filter(Number.isFinite);
+    const sun = sunTimes(d.date);
+    const [y, m, dd] = d.date.split("-").map(Number);
+    return {
+      date: new Date(y, m - 1, dd).getTime(),
+      code: mostCommon(d.codes, 3),
+      max: Math.max(...temps),
+      min: Math.min(...temps),
+      rain: Math.round(d.rain * 10) / 10,
+      rainChance: d.chance == null ? null : Math.round(d.chance),
+      wind: d.wind,
+      sunrise: sun.sunrise,
+      sunset: sun.sunset,
+    };
+  });
+
+  // Nå-verdiene tas fra Nowcast, som er justert mot observasjoner, og
+  // faller tilbake på første time i prognosen.
+  if (nowcast.status !== "fulfilled") console.warn(`[weather] nowcast feilet: ${nowcast.reason?.message}`);
+  const nowBody = nowcast.status === "fulfilled" ? nowcast.value : null;
+  const nowFirst = nowBody?.properties?.timeseries?.[0]?.data;
+  const fcFirst = entries[0].data;
+  const details = { ...fcFirst.instant.details, ...(nowFirst?.instant?.details || {}) };
+  const symbol = metSymbol(nowFirst?.next_1_hours?.summary?.symbol_code || fcFirst.next_1_hours?.summary?.symbol_code);
 
   return {
+    source: "MET Norge",
+    updated: forecast.value.properties.meta?.updated_at || null,
     current: {
-      temp: p.current.temperature_2m,
-      feels: p.current.apparent_temperature,
-      code: p.current.weather_code,
-      wind: p.current.wind_speed_10m,
-      rain: p.current.precipitation,
-      day: p.current.is_day === 1,
+      temp: details.air_temperature,
+      feels: details.apparent_air_temperature ?? details.air_temperature,
+      code: symbol.code,
+      text: symbol.text,
+      wind: details.wind_speed ?? 0,
+      gust: details.wind_speed_of_gust ?? null,
+      rain: nowFirst?.next_1_hours?.details?.precipitation_amount ?? fcFirst.next_1_hours?.details?.precipitation_amount ?? 0,
+      day: isDaylight(Date.now()),
     },
-    days,
+    days: dayList,
     // Tavla viser 24 t og vinduet 48 t; klienten klipper selv.
     hourly: hourly.filter(h => h.t >= Date.now() - 3_600_000).slice(0, 50),
+    nowcast: nowBody ? summarizeNowcast(nowBody) : null,
   };
 }
 
@@ -634,7 +791,7 @@ const VERSION = await hashSources();
 
 const ROUTES = {
   "/api/departures": () => cached("departures", 20_000, loadDepartures),
-  "/api/weather": () => cached("weather", 10 * 60_000, loadWeather),
+  "/api/weather": () => cached("weather", 5 * 60_000, loadWeather),
   "/api/news": loadNews,
   "/api/office": () => cached("office", 3 * 60_000, loadOffice),
   "/api/version": async () => ({ data: { version: VERSION } }),
@@ -699,6 +856,18 @@ async function serveStatic(pathname, res) {
 createServer(async (req, res) => {
   const { pathname } = new URL(req.url, "http://localhost");
   if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "");
+
+  if (pathname === "/api/radar") {
+    try {
+      const image = await loadRadar();
+      return send(res, 200, req.method === "HEAD" ? "" : image.body, {
+        "Content-Type": image.type,
+        "Cache-Control": "public, max-age=120",
+      });
+    } catch (error) {
+      return send(res, 502, error.message, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+    }
+  }
 
   const route = ROUTES[pathname];
   if (!route) return serveStatic(pathname, res);

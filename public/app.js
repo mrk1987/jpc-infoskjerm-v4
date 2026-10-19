@@ -3,7 +3,7 @@
 
 const REFRESH = {
   departures: 20_000,
-  weather: 10 * 60_000,
+  weather: 5 * 60_000,
   news: 5 * 60_000,
   office: 2 * 60_000,
   version: 5 * 60_000,
@@ -246,9 +246,10 @@ function renderWeather() {
 
   $("wx-icon").innerHTML = wxIcon(current.code, current.day);
   $("wx-temp").textContent = Math.round(current.temp) + "°";
-  $("wx-cond").textContent = WX_TEXT[current.code] || "Ukjent vær";
-  const bits = [`Føles som ${Math.round(current.feels)}°`, `vind ${Math.round(current.wind)} m/s`];
-  if (current.rain > 0) bits.push(`${current.rain.toLocaleString("no-NO")} mm nå`);
+  $("wx-cond").textContent = current.text || WX_TEXT[current.code] || "Ukjent vær";
+  // Nowcast-meldingen («Regn om 15 min») er det mest nyttige når den finnes.
+  const soon = nowcastSummary(body.data.nowcast, current.temp);
+  const bits = soon ? [soon] : [`Føles som ${Math.round(current.feels)}°`, `vind ${Math.round(current.wind)} m/s`];
   $("wx-meta").textContent = bits.join(", ");
 
   const rows = days.slice(0, 2).map((d, i) => {
@@ -262,6 +263,22 @@ function renderWeather() {
   const now = Date.now();
   const series = hourly.filter(h => h.t >= now - 3_600_000).slice(0, 25);
   renderChart($("wx-chart"), series);
+}
+
+// Oppsummerer METs radarbaserte nedbørsvarsel for de neste 90 minuttene.
+// Tom streng betyr opphold hele perioden.
+function nowcastSummary(nowcast, temp, now = Date.now()) {
+  const points = (nowcast?.points || []).filter(p => p.t >= now - 5 * 60_000);
+  if (!points.length) return "";
+  const wet = p => p.rate >= 0.1;
+  const kind = temp <= 0.5 ? "Snø" : "Regn";
+  const mins = p => Math.max(1, Math.round((p.t - now) / 60_000));
+  if (wet(points[0])) {
+    const dry = points.find(p => !wet(p));
+    return dry ? `${kind} nå, opphold om ${mins(dry)} min` : `${kind} den neste halvannen timen`;
+  }
+  const next = points.find(wet);
+  return next ? `${kind} om ${mins(next)} min` : "";
 }
 
 function smoothPath(points) {
@@ -663,6 +680,7 @@ const PANELS = {
   weather: {
     source: () => $("weather"),
     title: "Været på Skullerud",
+    full: true,
     render: renderWeatherPanel,
   },
   lunch: {
@@ -873,28 +891,83 @@ function renderBoardPanel(body, now = Date.now()) {
   body.replaceChildren(wrap);
 }
 
-/* ----- Vær: nå, 48 timer og sju dager ----- */
+/* ----- Vær: nå, radar, 48 timer og sju dager ----- */
+
+// Nedbør hvert femte minutt de neste 90 minuttene, som søyler.
+function renderNowcastChart(points, now = Date.now()) {
+  const upcoming = points.filter(p => p.t >= now - 5 * 60_000).slice(0, 19);
+  const W = 904, H = 120, base = 92;
+  const step = W / Math.max(upcoming.length, 1);
+  const max = Math.max(2, ...upcoming.map(p => p.rate));
+  let out = `<line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="var(--rule)" stroke-width="2"/>`;
+  upcoming.forEach((p, i) => {
+    const h = p.rate >= 0.05 ? Math.max(4, (p.rate / max) * (base - 8)) : 0;
+    if (h) out += `<rect x="${(i * step + step * .15).toFixed(1)}" y="${(base - h).toFixed(1)}" width="${(step * .7).toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="var(--rain)"/>`;
+    const ahead = Math.round((p.t - now) / 60_000 / 15) * 15;
+    if (i === 0 || (i % 6 === 0 && ahead > 0)) {
+      const last = i === upcoming.length - 1;
+      out += `<text x="${(last ? W : i * step + step / 2).toFixed(1)}" y="${H - 4}" text-anchor="${last ? "end" : "middle"}" font-size="19" font-weight="600" fill="var(--faint)">${i === 0 ? "Nå" : "+" + ahead + " min"}</text>`;
+    }
+  });
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.classList.add("xp-nowcast");
+  svg.innerHTML = out;
+  return svg;
+}
+
+// Radarbildet er en animert GIF på ~3,5 MB. Samme element gjenbrukes når
+// vinduet tegnes på nytt, så det ikke lastes og starter om hvert femte minutt.
+function radarFigure() {
+  const ps = panel.state;
+  const version = Math.floor(Date.now() / 600_000);
+  if (!ps.radar || ps.radarVersion !== version) {
+    const figure = el("figure", "xp-radar");
+    const img = el("img");
+    img.alt = "Nedbørsradar for Sørøst-Norge";
+    img.decoding = "async";
+    img.addEventListener("error", () => figure.classList.add("broken"));
+    img.src = "/api/radar?v=" + version;
+    figure.append(img, text("figcaption", "", "Radar fra Meteorologisk institutt, siste timer. Skullerud ligger rett sørøst for Oslo."));
+    ps.radar = figure;
+    ps.radarVersion = version;
+  }
+  return ps.radar;
+}
 
 function renderWeatherPanel(body) {
   const w = state.weather;
   if (!w?.data) { body.replaceChildren(text("p", "xp-empty", "Henter været")); return; }
-  const { current, days, hourly } = w.data;
-  setPanelSub(w.fetchedAt ? `Prognose fra Open-Meteo, oppdatert ${clockText(Date.parse(w.fetchedAt))}` : "Prognose fra Open-Meteo");
+  const { current, days, hourly, nowcast } = w.data;
+  // MET-data er lisensiert CC BY 4.0 og skal krediteres.
+  const fetched = w.fetchedAt ? `, hentet ${clockText(Date.parse(w.fetchedAt))}` : "";
+  setPanelSub(`Data fra MET Norge (Yr)${fetched}`);
 
   const hero = el("div", "xp-wx-hero");
   hero.append(el("div", "wx-icon", wxIcon(current.code, current.day)), text("div", "big", Math.round(current.temp) + "°"));
   const words = el("div");
-  words.append(text("p", "cond", WX_TEXT[current.code] || "Ukjent vær"));
+  words.append(text("p", "cond", current.text || WX_TEXT[current.code] || "Ukjent vær"));
   const today = days[0];
-  if (today) words.append(text("p", "range", `I dag ${Math.round(today.max)}° / ${Math.round(today.min)}°`));
+  if (today) words.append(text("p", "range", `Resten av dagen ${Math.round(today.max)}° / ${Math.round(today.min)}°`));
   hero.append(words);
 
   const facts = el("div", "xp-facts");
   const fact = (value, label) => { const f = el("div", "xp-fact"); f.append(text("b", "", value), text("span", "", label)); facts.append(f); };
   fact(Math.round(current.feels) + "°", "Føles som");
-  fact(Math.round(current.wind) + " m/s", "Vind nå");
-  fact(current.rain.toLocaleString("no-NO") + " mm", "Nedbør nå");
+  fact(Math.round(current.wind) + " m/s", current.gust != null ? `Vind, kast ${Math.round(current.gust)} m/s` : "Vind nå");
+  fact(current.rain.toLocaleString("no-NO", { maximumFractionDigits: 1 }) + " mm", "Nedbør neste time");
   if (today?.sunrise) fact(`${clockText(today.sunrise)}–${clockText(today.sunset)}`, "Sol opp og ned");
+
+  const radarParts = [text("h3", "xp-h", "Nedbør neste 90 minutter")];
+  if (nowcast?.points?.length) {
+    const summary = nowcastSummary(nowcast, current.temp);
+    radarParts.push(text("p", "xp-nowcast-text", summary || "Opphold de neste 90 minuttene"));
+    // Når det er tørt, er en tom graf bare støy.
+    if (summary) radarParts.push(renderNowcastChart(nowcast.points));
+  } else {
+    radarParts.push(text("p", "xp-nowcast-text", "Korttidsvarselet er ikke tilgjengelig akkurat nå"));
+  }
+  radarParts.push(radarFigure());
 
   const chart = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   chart.setAttribute("viewBox", "0 0 952 150");
@@ -923,7 +996,7 @@ function renderWeatherPanel(body) {
     week.append(li);
   });
 
-  body.replaceChildren(hero, facts, text("h3", "xp-h", "Neste 48 timer"), chart,
+  body.replaceChildren(hero, facts, ...radarParts, text("h3", "xp-h", "Neste 48 timer"), chart,
     text("h3", "xp-h", `${days.length} dager`), week);
 }
 
@@ -1153,7 +1226,11 @@ function tick() {
 // siden skal lastes på nytt.
 function ownAsset(node) {
   if (!(node instanceof HTMLElement) || !/^(IMG|SCRIPT|LINK)$/.test(node.tagName)) return false;
-  try { return new URL(node.src || node.href, location.href).origin === location.origin; } catch { return false; }
+  // Radarbildet under /api/ er data, ikke en del av siden.
+  try {
+    const url = new URL(node.src || node.href, location.href);
+    return url.origin === location.origin && !url.pathname.startsWith("/api/");
+  } catch { return false; }
 }
 
 let assetFailed = false;

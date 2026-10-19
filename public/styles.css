@@ -793,6 +793,20 @@ ol, ul { list-style: none; }
 .xp-fact span { font-size: 20px; color: var(--muted); }
 
 .xp-chart { width: 100%; height: auto; overflow: visible; margin-top: 30px; }
+
+.xp-nowcast-text { font-size: 30px; font-weight: 700; }
+.xp-nowcast { display: block; width: 100%; height: auto; margin-top: 10px; }
+.xp-nowcast text { font-family: var(--ui); }
+.xp-radar { margin: 22px 0 0; }
+.xp-radar img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 771 / 631;
+  border-radius: 18px;
+  background: var(--deck-2);
+}
+.xp-radar figcaption { font-size: 19px; color: var(--faint); margin-top: 10px; }
+.xp-radar.broken { display: none; }
 .xp-chart text { font-family: var(--ui); }
 
 .xp-week li {

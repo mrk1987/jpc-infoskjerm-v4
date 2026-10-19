@@ -9,12 +9,14 @@ avgangstavle i LED-stil. Etterfølger av
 ## Hva er nytt i v4
 
 - **Server i stedet for ren nettleserapp.** En liten Node-server (null npm-avhengigheter) henter
-  Entur, Open-Meteo, NRK og kontorfilene, cacher dem og leverer ferdige JSON-svar. Skjermen
+  Entur, MET Norge (Yr), NRK, ITavisen og kontorfilene, cacher dem og leverer ferdige JSON-svar. Skjermen
   trenger ikke lenger CORS-triks eller rss2json, og alle skjermer deler samme cache.
 - **Avgangstavle i LED-stil**, delt i «Mot sentrum» og «Mot Mortensrud». Minuttene telles ned
   hvert sekund fra forventet avgangstid, ikke bare ved hver henting. Forsinkelser og innstilte
   avganger vises i rødt, og avviksmeldinger fra Entur ruller nederst på tavla.
-- **Værgraf for neste 24 timer** med temperatur, nedbør, natt og ikoner hver tredje time.
+- **Været fra Yr (MET Norge)**: graf for neste 24 timer med temperatur, nedbør, natt og ikoner
+  hver tredje time. Kommer det regn i løpet av halvannen time, står det under temperaturen
+  («Regn om 15 min»), basert på METs radarbaserte korttidsvarsel (Nowcast).
 - **Nyheter i to kolonner**, NRK til venstre og ITavisen til høyre. Hver kolonne viser én sak om gangen med ingress, og resten av plassen fylles med de neste sakene. Kolonnene bytter sak forskjøvet med seks sekunder.
 - **Lunsj bytter til neste arbeidsdag** etter servering, og hopper over helg og helligdager.
 - **Utløpt nedtelling skjules** i stedet for å stå på 00 00 00 00.
@@ -29,7 +31,7 @@ over resten av skjermen:
 | Panel | Utvidet visning |
 |---|---|
 | T-bane | 8 avganger i hver retning, de neste 14 bussene (70, 76, 79, FB10 …) med plattform, og alle avvik |
-| Vær | Nå-tilstand, føles som, vind, sol opp/ned, graf for 48 timer og prognose for 7 dager |
+| Vær | Nå-tilstand, føles som, vind og vindkast, sol opp/ned, nedbør hvert 5. minutt de neste 90 minuttene, animert nedbørsradar for Sørøst-Norge, graf for 48 timer og prognose for 7 dager |
 | Lunsj | Hele ukemenyen, med dagens rett uthevet og passerte dager dempet |
 | NRK / ITavisen | Valgt sak med bilde og hele teksten (ITavisen sender hele saken i RSS), QR-kode til saken, og resten av sakene under (trykk for å bytte) |
 
@@ -46,6 +48,18 @@ gratis og har hele saken i RSS (`content:encoded`). Serveren fjerner innebygde t
 reklamewidgeter, og filtrerer bort annonsørinnhold, som ITavisen merker med versaler foran kolon
 («TIDSBEGRENSET: …»). ITavisen heller mer mot forbrukerteknologi enn digi.no. Det finnes ingen
 gratis norsk kilde med digi.nos B2B-vinkel og fulltekst.
+
+### Værdata fra MET Norge
+
+Været kom fra Open-Meteo frem til 2026-10-19 og hentes nå fra MET Norge, samme kilde som yr.no.
+Dataene er lisensiert CC BY 4.0 og krediteres i værvinduet. METs vilkår følges: User-Agent med
+kontaktinfo (repo-URL-en), koordinater med høyst fire desimaler, og `If-Modified-Since` slik at
+uendrede prognoser bare gir et 304-svar. Radarbildet hentes én gang per oppdatering og deles av alle
+skjermer. Ruten har ingen filendelse fordi Cloudflare ellers ville cachet bildet i fire timer.
+
+METs symbolkoder oversettes til WMO-kodene som ikonene bygger på, og til Yrs ordlyd («Lette
+regnbyger»). Soloppgang og solnedgang regnes ut lokalt (avviker høyst et par minutter fra METs
+sunrise-API).
 
 ### Kiosk-PC
 
@@ -110,7 +124,8 @@ Kilden kan overstyres med miljøvariablene `CONTENT_REPO` og `CONTENT_BRANCH`.
 | Rute | Kilde | Cache |
 |---|---|---|
 | `/api/departures` | Entur GraphQL, Skullerud (NSR:StopPlace:58227), T-bane og buss | 20 sek |
-| `/api/weather` | Open-Meteo, 59.8667, 10.8400, 7 dager | 10 min |
+| `/api/weather` | MET Norge: Locationforecast og Nowcast, 59.8667, 10.8400, 7 dager | 5 min |
+| `/api/radar` | MET Norge radar, `southeastern_norway`, animert GIF (~3,5 MB) | til `Expires` fra MET |
 | `/api/news` | NRK siste nytt og ITavisen (RSS), hver strøm for seg | 5 min |
 | `/api/office` | Meny, avstemning, beskjed og nedtelling fra originalrepoet | 3 min |
 | `/api/version` | Hash av frontend-filene | — |
