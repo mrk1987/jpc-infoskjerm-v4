@@ -26,7 +26,11 @@ avgangstavle i LED-stil. Etterfølger av
   Sammenhengende fri pekes ut som på rodedager.no: «Langhelg: 3 dager fri (fredag–søndag)»,
   «5 dager fri på rad (torsdag–mandag)» i påsken, og inneklemte dager (én arbeidsdag mellom to
   fridager, f.eks. fredagen etter Kristi himmelfart): «Inneklemt fredag 15. mai: 4 dager fri med
-  én feriedag». En inneklemt dag som er passert, nevnes ikke.
+  én feriedag». En inneklemt dag som er passert, nevnes ikke. Er det inneklemte dager på begge
+  sider, nevnes begge med samlet antall fridager. «Langhelg» brukes bare når en helg er med.
+- **JPCs egne fridager:** julaften og nyttårsaften er fri hos JPC selv om de ikke er røde dager
+  (`JPC_DAYS_OFF` i `public/app.js`). De vises som «Neste fridag» og teller med i langhelger og
+  inneklemte dager, men ikke i kantinens «Stengt, helligdag».
 - **Automatisk omlasting** når en ny versjon deployes, og hver natt kl. 04.
 - Fast lerret på 1080 × 1920 som skaleres til skjermen, slik at oppsettet er identisk overalt.
 

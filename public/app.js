@@ -550,11 +550,25 @@ function isHoliday(date) {
   return holidays(date.getFullYear()).some(h => h.date.toDateString() === date.toDateString());
 }
 
+// Dager JPC gir fri selv om de ikke er røde dager. De teller med i
+// langhelger og inneklemte dager, men ikke i kantinens «stengt, helligdag».
+const JPC_DAYS_OFF = [[11, 24, "Julaften"], [11, 31, "Nyttårsaften"]];
+
+// Alle fridager i året: røde dager (red) og JPCs egne, sortert på dato.
+function daysOffInYear(year) {
+  return [
+    ...holidays(year).map(h => ({ ...h, red: true })),
+    ...JPC_DAYS_OFF.map(([month, day, name]) => ({ date: new Date(year, month, day), name, red: false })),
+  ].sort((a, b) => a.date - b.date);
+}
+
+const isJpcDayOff = date => JPC_DAYS_OFF.some(([month, day]) => date.getMonth() === month && date.getDate() === day);
+
 // Sammenhengende fridager rundt en helligdag: helligdager og helgedager på
 // rad. Inneklemte dager (som fredagen etter Kristi himmelfart) er vanlige
 // arbeidsdager og bryter rekka, som på rodedager.no.
 const addDays = (date, days) => { const d = new Date(date); d.setDate(d.getDate() + days); return d; };
-const isDayOff = d => d.getDay() === 0 || d.getDay() === 6 || isHoliday(d);
+const isDayOff = d => d.getDay() === 0 || d.getDay() === 6 || isHoliday(d) || isJpcDayOff(d);
 // Avrunding tar høyde for sommertid, der et døgn kan være 23 eller 25 timer.
 const daysBetween = (start, end) => Math.round((end - start) / 86_400_000) + 1;
 
@@ -567,22 +581,25 @@ function daysOffAround(date) {
 
 // En inneklemt dag er én arbeidsdag med fridager på begge sider, f.eks.
 // fredagen etter Kristi himmelfart. Tar man den fri, smelter fridagene sammen.
-function bridgeDay(stretch) {
-  for (const dir of [1, -1]) {
+// Det kan være én på hver side, f.eks. jula 2030 med julaften på en tirsdag:
+// mandag 23. og fredag 27. desember. Hver inneklemt dag returneres med hvor
+// langt fridagene strekker seg om man tar den fri.
+function bridgeDays(stretch) {
+  const bridges = [];
+  for (const dir of [-1, 1]) {
     const day = addDays(dir > 0 ? stretch.end : stretch.start, dir);
     if (isDayOff(day) || !isDayOff(addDays(day, dir))) continue;
     const other = daysOffAround(addDays(day, dir));
-    const start = dir > 0 ? stretch.start : other.start;
-    const end = dir > 0 ? other.end : stretch.end;
-    return { day, days: daysBetween(start, end) };
+    bridges.push({ day, start: dir < 0 ? other.start : null, end: dir > 0 ? other.end : null });
   }
-  return null;
+  return bridges;
 }
 
-// Første helligdag etter i dag. På selve dagen telles det mot den neste.
-function nextHoliday(now) {
+// Første fridag etter i dag, rød dag eller JPCs egen. På selve dagen telles
+// det mot den neste.
+function nextDayOff(now) {
   const year = new Date(now).getFullYear();
-  return [...holidays(year), ...holidays(year + 1)].find(h => h.date.getTime() > now);
+  return [...daysOffInYear(year), ...daysOffInYear(year + 1)].find(h => h.date.getTime() > now);
 }
 
 function splitDish(title) {
@@ -708,7 +725,7 @@ function countdownTarget(now) {
   const cd = state.office?.data?.countdown;
   const target = cd ? Date.parse(cd.target) : NaN;
   if (target > now) return { target, label: cd.label || "Nedtelling" };
-  const holiday = nextHoliday(now);
+  const holiday = nextDayOff(now);
   if (!holiday) return null;
   const d = holiday.date;
   const day = WEEKDAYS[d.getDay()];
@@ -718,16 +735,28 @@ function countdownTarget(now) {
   // Ordlyden følger rodedager.no: 3–4 dager er en langhelg.
   const notes = [];
   const span = `(${WEEKDAYS[stretch.start.getDay()]}–${WEEKDAYS[stretch.end.getDay()]})`;
-  if (stretch.days >= 5) notes.push(`${stretch.days} dager fri på rad ${span}`);
+  // «Langhelg» bare når en helg er med; tirsdag–torsdag er ingen helg.
+  const hasWeekend = [...Array(stretch.days).keys()].some(i => [0, 6].includes(addDays(stretch.start, i).getDay()));
+  if (stretch.days >= 5 || (stretch.days >= 3 && !hasWeekend)) notes.push(`${stretch.days} dager fri på rad ${span}`);
   else if (stretch.days >= 3) notes.push(`Langhelg: ${stretch.days} dager fri ${span}`);
-  const bridge = bridgeDay(stretch);
-  // En inneklemt dag som allerede er passert, er ikke verdt å nevne.
-  if (bridge && addDays(bridge.day, 1).getTime() > now) {
-    const b = bridge.day;
-    notes.push(`Inneklemt ${WEEKDAYS[b.getDay()]} ${b.getDate()}. ${MONTHS[b.getMonth()]}: ${bridge.days} dager fri med én feriedag`);
+  // Inneklemte dager som allerede er passert, er ikke verdt å nevne.
+  const bridges = bridgeDays(stretch).filter(b => addDays(b.day, 1).getTime() > now);
+  if (bridges.length) {
+    const start = bridges.find(b => b.start)?.start ?? stretch.start;
+    const end = bridges.find(b => b.end)?.end ?? stretch.end;
+    const total = daysBetween(start, end);
+    const days = bridges.map(b => b.day);
+    const sameMonth = days.every(b => b.getMonth() === days[0].getMonth());
+    const names = days.map((b, i) => `${WEEKDAYS[b.getDay()]} ${b.getDate()}.` +
+      (!sameMonth || i === days.length - 1 ? ` ${MONTHS[b.getMonth()]}` : "")).join(" og ");
+    notes.push(days.length === 1
+      ? `Inneklemt ${names}: ${total} dager fri med én feriedag`
+      : `Inneklemte ${names}: ${total} dager fri med to feriedager`);
   }
   // Datoen står i den lille linja over, så navnet får plass på én linje.
-  return { target: d.getTime(), kicker: `Neste røde dag · ${day} ${d.getDate()}. ${MONTHS[d.getMonth()]}`, label: holiday.name, notes };
+  // JPCs egne fridager er ikke røde dager, og kalles derfor «fridag».
+  const kind = holiday.red ? "Neste røde dag" : "Neste fridag";
+  return { target: d.getTime(), kicker: `${kind} · ${day} ${d.getDate()}. ${MONTHS[d.getMonth()]}`, label: holiday.name, notes };
 }
 
 function renderCountdown(now = Date.now()) {
