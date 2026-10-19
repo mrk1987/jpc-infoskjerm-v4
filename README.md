@@ -75,6 +75,7 @@ Bak panelene går en dempet animasjon som speiler været ute (`public/ambient.js
 | Sludd | Regn og snø blandet |
 | Snø | Snøfnugg som vugger ned |
 | Torden | Kraftig regn og et sjeldent, svakt lysglimt |
+| Bitende kulde | Rim på ruta: iskrystaller kryper inn fra kantene og glimter svakt. Tettest i de nederste hjørnene, bare en tynn kant ved logo og klokke. Ligger foran panelene, som rim på glass. |
 | Vind uten nedbør (fra 8 m/s, eller kast fra ~13 m/s) | Blader som tumler forbi fra høyre mot venstre, og små virvler som snurrer og tones ut. Bladene følger årstiden: høstfarger sep–nov, grønne blader om sommeren, grønt med lyse blomsterblader om våren, og fint fokksnø i stedet for blader om vinteren. |
 | Vind med regn, snø eller sludd | Ingen egne vindeffekter; nedbøren legger seg på skrå fra høyre mot venstre, mer jo sterkere det blåser: rett ned i stille vær, ~30° i frisk bris, ~50° i kuling, ~70° i sterk kuling og nesten vannrett i storm. Kompassretningen brukes ikke. |
 
@@ -87,6 +88,7 @@ Bak panelene går en dempet animasjon som speiler været ute (`public/ambient.js
 | Sol, stjerner | Det som er igjen av himmelen når skyer og tåke er trukket fra | 60 % skydekke gir sol med 40 % styrke |
 | Tåke | Yrs tåkedekke i prosent | |
 | Torden | Yrs sannsynlighet for torden neste time | 100 % gir et svakt lysglimt hvert 14.–40. sekund, 20 % omtrent hvert eller annet minutt |
+| Rim | Den laveste av Yrs temperatur og føles-som-temperatur | Svakt fra −8 °C, tydelig rundt −14 °C, fullt fra −20 °C. Rimet kryper fram over ~8 sekunder når det blir kaldt nok. |
 | Vind | Yrs middelvind og vindkast. Styrer vinkelen på regn og snø, og farten på skyer, blader og virvler; alt blåser fra høyre mot venstre. | Blader og virvler fra 8 m/s (eller kast fra ~13 m/s) når det er opphold, flere og raskere jo sterkere det blåser. Vinkelen på nedbøren øker jevnt opp til ~80° ved 24 m/s (storm). |
 
 Styrken går fra 0 til 1 på en logaritmisk skala, så yr, jevnt regn og styrtregn ser tydelig
@@ -101,6 +103,14 @@ stillbilde i stedet for animasjon.
 `?vaer=regn:1,vind:1` er styrtregn i storm (nesten vannrett), `?vaer=regn:0.15` er yr.
 `&aarstid=vår|sommer|høst|vinter` viser bladene for en annen årstid, f.eks.
 `?vaer=vind&aarstid=vinter` for fokksnø.
+
+**Rimet er et ekte foto.** `public/frost.webp` er laget av et fotografi av rim på en rute av
+[Simon Fairhurst på Unsplash](https://unsplash.com/photos/frozen-patterns-on-a-light-blue-background-qwFlzoUQsC4)
+(Unsplash-lisensen). `tools/make_frost.py` gjør fotoet om til en isblå maske der krystallene
+er dekkende og glasset mellom dem klart, og `public/frost.js` legger den langs alle fire kanter.
+Generert rim (forgreinede streker, og en fasefelt-simulering av krystallvekst) ble prøvd først og
+så ut som spindelvev eller papp; fotoet ser ut som rim. Forhåndsvis med `?vaer=frost` eller
+`?vaer=frost,snø`.
 
 ### Kiosk-PC
 

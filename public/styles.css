@@ -76,7 +76,16 @@ ol, ul { list-style: none; }
   pointer-events: none;
   z-index: 0;
 }
-.screen > :not(.ambient):not(.xp) { position: relative; z-index: 1; }
+/* Rimet (også fra ambient.js) ligger foran panelene, men under vinduene. */
+.frost {
+  position: absolute;
+  inset: 0;
+  width: 1080px;
+  height: 1920px;
+  pointer-events: none;
+  z-index: 40;
+}
+.screen > :not(.ambient):not(.frost):not(.xp) { position: relative; z-index: 1; }
 
 /* ---------- Topp ---------- */
 

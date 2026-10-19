@@ -340,6 +340,11 @@ function ambientFor({ current, nowcast }) {
   // Vindkast teller litt, så en byget dag med rolig middelvind også synes.
   // 8 m/s gir svak vind på skjermen, 16 m/s eller mer full styrke.
   const windy = Math.max(current.wind, (current.gust ?? 0) * 0.6);
+  // Rim på ruta i bitende kulde, etter den kaldeste av temperatur og
+  // føles-som: svakt fra −8 °C, tydelig rundt −14 °C og fullt fra −20 °C.
+  const cold = Math.min(current.temp, current.feels ?? current.temp);
+  if (cold <= -8) layers.frost = clampNum((-cold - 8) / 12, 0.15, 1);
+
   // Vind vises som blader og virvler bare når det er oppholdsvær. Med regn,
   // snø eller sludd er det skrå nedbøren som viser at det blåser.
   if (windy >= 8 && !layers.rain && !layers.snow) layers.wind = clampNum((windy - 6) / 10, 0.2, 1);
@@ -355,7 +360,7 @@ function ambientFor({ current, nowcast }) {
 }
 
 // Forhåndsvisning uten å vente på riktig vær: ?vaer=snø,vind
-// Lag: sol, natt, skyer, tåke, regn, sludd, snø, torden, vind. Styrke kan
+// Lag: sol, natt, skyer, tåke, regn, sludd, snø, torden, vind, frost. Styrke kan
 // angis med kolon, fra 0 til 1: ?vaer=regn:1,vind:0.4 er styrtregn med
 // moderat vind, ?vaer=regn:0.15 er yr.
 const AMBIENT_PREVIEW = (() => {
@@ -371,8 +376,9 @@ const AMBIENT_PREVIEW = (() => {
     "snø": k => ({ snow: k, clouds: Math.max(0.6, k) }),
     torden: k => ({ rain: k, lightning: 1, clouds: 1 }),
     vind: k => ({ wind: k }),
+    frost: k => ({ frost: k }),
   };
-  const defaults = { regn: 0.6, sludd: 0.6, "snø": 0.6, torden: 0.9, vind: 0.7 };
+  const defaults = { regn: 0.6, sludd: 0.6, "snø": 0.6, torden: 0.9, vind: 0.7, frost: 0.8 };
   const layers = {};
   let windStrength = 0;
   for (const part of wanted.toLowerCase().split(",")) {

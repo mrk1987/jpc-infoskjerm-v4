@@ -2,7 +2,8 @@
 //
 // Rolige animasjoner bak panelene som speiler været ute: sol, stjerner,
 // skyer, tåke, regn, sludd, snø, torden og vind. Vind uten nedbør er blader
-// og virvler; med nedbør vises vinden bare som skrått regn eller snø. app.js bestemmer hvilke lag
+// og virvler; med nedbør vises vinden bare som skrått regn eller snø. I
+// bitende kulde legger det seg rim langs kantene, som på et vindu. app.js bestemmer hvilke lag
 // som er på og hvor sterke de er (0 til 1); her tegnes alt på ett lerret.
 // Alt holdes dempet, så teksten foran alltid er lett å lese.
 //
@@ -23,7 +24,7 @@
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const rand = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-  const LAYERS = ["sun", "stars", "clouds", "fog", "rain", "snow", "lightning", "wind"];
+  const LAYERS = ["sun", "stars", "clouds", "fog", "rain", "snow", "lightning", "wind", "frost"];
 
   let target = { layers: {}, wind: 0, dark: false, night: false };
   const level = Object.fromEntries(LAYERS.map(l => [l, 0])); // styrken som vises nå
@@ -197,6 +198,12 @@
   function topUp(pool, count, make) {
     while (pool.length < count) pool.push(make(!started));
   }
+
+  /* ---------- Rim på ruta ---------- */
+
+  // Rimet tegnes i frost.js, på et eget lerret foran panelene.
+  // Her sendes bare styrken videre.
+  const frost = () => window.JpcFrost;
 
   /* ---------- Tegning ---------- */
 
@@ -465,6 +472,7 @@
     if (level.snow || pools.snow.length) drawSnow(t, dt, level.snow);
     if (level.wind || pools.leaves.length || pools.twirls.length) drawWind(t, dt, level.wind);
     if (level.lightning > 0.05 && !reduceMotion) drawLightning(t, dt, level.lightning);
+    frost()?.draw(t, level.frost, reduceMotion);
     started = true;
   }
 
@@ -480,7 +488,10 @@
     last = t;
     draw(t, dt);
     frame = busy() ? requestAnimationFrame(loop) : 0;
-    if (!frame) ctx.clearRect(0, 0, W, H);
+    if (!frame) {
+      ctx.clearRect(0, 0, W, H);
+      frost()?.draw(t, 0);
+    }
   }
 
   function render() {
@@ -500,7 +511,7 @@
   buildStatic();
 
   window.JpcAmbient = {
-    // layers: { sun, stars, clouds, fog, rain, snow, lightning, wind } med styrke 0–1.
+    // layers: { sun, stars, clouds, fog, rain, snow, lightning, wind, frost } med styrke 0–1.
     // wind: vind i m/s. Den styrer vinkelen på regn og snø og farten på skyer,
     // blader og virvler; alt blåser fra høyre mot venstre.
     set(next) {
@@ -517,6 +528,7 @@
       canvas.width = Math.round(W * res);
       canvas.height = Math.round(H * res);
       ctx.setTransform(res, 0, 0, res, 0, 0);
+      frost()?.resize(res);
       if (reduceMotion) render();
     },
   };
