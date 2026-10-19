@@ -21,6 +21,26 @@ avgangstavle i LED-stil. Etterfølger av
 - **Automatisk omlasting** når en ny versjon deployes, og hver natt kl. 04.
 - Fast lerret på 1080 × 1920 som skaleres til skjermen, slik at oppsettet er identisk overalt.
 
+## Trykk for mer (berøringsskjerm)
+
+Skjermen står på en Samsung Flip med berøring. Et trykk på et panel løfter det ut som et vindu
+over resten av skjermen:
+
+| Panel | Utvidet visning |
+|---|---|
+| T-bane | 8 avganger i hver retning, de neste 14 bussene (70, 76, 79, FB10 …) med plattform, og alle avvik |
+| Vær | Nå-tilstand, føles som, vind, sol opp/ned, graf for 48 timer og prognose for 7 dager |
+| Lunsj | Hele ukemenyen, med dagens rett uthevet og passerte dager dempet |
+| NRK / digi.no | Valgt sak med bilde og hele teksten, QR-kode til saken, og resten av sakene under (trykk for å bytte) |
+
+Vinduet lukkes med krysset, et trykk utenfor eller Esc. **Står det urørt i 3 minutter, lukkes det
+av seg selv**; ringen rundt krysset viser tiden som er igjen, og hver berøring starter den på nytt.
+Skjermen navigerer aldri bort fra seg selv: lenker til saker vises som QR-kode, ikke som klikkbare
+lenker. Zoom, tekstmarkering og langt trykk er slått av, og bare innholdet i vinduet kan rulles.
+
+QR-kodene lages av [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) 1.4.4
+(MIT), lagt inn som `public/qrcode.js`.
+
 ## Ukemeny hentes automatisk fra intranettet
 
 Kantinen legger ut ukemenyen på «Min side» på
@@ -66,8 +86,8 @@ Kilden kan overstyres med miljøvariablene `CONTENT_REPO` og `CONTENT_BRANCH`.
 
 | Rute | Kilde | Cache |
 |---|---|---|
-| `/api/departures` | Entur GraphQL, Skullerud (NSR:StopPlace:58227) | 20 sek |
-| `/api/weather` | Open-Meteo, 59.8667, 10.8400 | 10 min |
+| `/api/departures` | Entur GraphQL, Skullerud (NSR:StopPlace:58227), T-bane og buss | 20 sek |
+| `/api/weather` | Open-Meteo, 59.8667, 10.8400, 7 dager | 10 min |
 | `/api/news` | NRK siste nytt og digi.no (RSS), hver strøm for seg | 5 min |
 | `/api/office` | Meny, avstemning, beskjed og nedtelling fra originalrepoet | 3 min |
 | `/api/version` | Hash av frontend-filene | — |

@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="color-scheme" content="dark" />
   <title>JPC Skullerud</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
@@ -28,7 +28,7 @@
 
     <section class="board" id="board" aria-label="T-baneavganger fra Skullerud">
       <div class="board-head">
-        <h2>T-bane fra Skullerud</h2>
+        <h2>T-bane fra Skullerud<i class="xp-hint" aria-hidden="true"></i></h2>
         <span class="health" id="health"><i></i><span id="health-label">Kobler til</span></span>
       </div>
       <div class="board-cols">
@@ -51,7 +51,7 @@
         <div class="wx-icon" id="wx-icon"></div>
         <div class="wx-temp" id="wx-temp">--°</div>
         <div class="wx-text">
-          <p class="wx-cond" id="wx-cond">Henter været</p>
+          <p class="wx-cond"><span id="wx-cond">Henter været</span><i class="xp-hint" aria-hidden="true"></i></p>
           <p class="wx-meta" id="wx-meta"></p>
         </div>
       </div>
@@ -62,7 +62,7 @@
     <section class="midrow" id="midrow">
       <article class="lunch" id="lunch">
         <header>
-          <h2 id="lunch-heading">Lunsj i dag</h2>
+          <h2><span id="lunch-heading">Lunsj i dag</span><i class="xp-hint" aria-hidden="true"></i></h2>
           <span class="pill" id="lunch-status"></span>
         </header>
         <p class="dish" id="lunch-dish">Henter menyen</p>
@@ -88,7 +88,7 @@
     <section class="news" id="news" aria-label="Siste nytt">
       <div class="news-col" data-feed="nrk">
         <header>
-          <h2>NRK</h2>
+          <h2>NRK<i class="xp-hint" aria-hidden="true"></i></h2>
           <span class="news-count"></span>
         </header>
         <div class="news-stage"></div>
@@ -97,7 +97,7 @@
       </div>
       <div class="news-col" data-feed="digi">
         <header>
-          <h2>digi.no</h2>
+          <h2>digi.no<i class="xp-hint" aria-hidden="true"></i></h2>
           <span class="news-count"></span>
         </header>
         <div class="news-stage"></div>
@@ -113,6 +113,7 @@
 
   </main>
 </div>
+<script src="qrcode.js"></script>
 <script src="app.js" type="module"></script>
 </body>
 </html>

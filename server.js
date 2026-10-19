@@ -73,7 +73,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 10_000) {
 const DEPARTURES_QUERY = `
   query ($stopId: String!) {
     stopPlace(id: $stopId) {
-      estimatedCalls(numberOfDepartures: 24, timeRange: 7200) {
+      estimatedCalls(numberOfDepartures: 100, timeRange: 7200) {
         aimedDepartureTime
         expectedDepartureTime
         realtime
@@ -111,16 +111,21 @@ async function loadDepartures() {
   const payload = await response.json();
   if (payload.errors?.length) throw new Error(payload.errors[0].message);
 
+  // Bussene går fra samme holdeplass. Tavla viser bare T-bane, men det
+  // utvidede vinduet viser alt, så begge sendes og klienten filtrerer.
   const calls = payload?.data?.stopPlace?.estimatedCalls || [];
   const departures = calls
-    .filter(call => call.serviceJourney?.journeyPattern?.line?.transportMode === "metro")
+    .filter(call => ["metro", "bus"].includes(call.serviceJourney?.journeyPattern?.line?.transportMode))
     .map(call => {
       const expected = new Date(call.expectedDepartureTime || call.aimedDepartureTime);
       const aimed = new Date(call.aimedDepartureTime || call.expectedDepartureTime);
+      const mode = call.serviceJourney.journeyPattern.line.transportMode;
       return {
-        line: call.serviceJourney.journeyPattern.line.publicCode || "T",
+        mode,
+        line: call.serviceJourney.journeyPattern.line.publicCode || (mode === "metro" ? "T" : "B"),
         destination: call.destinationDisplay?.frontText || "Ukjent",
-        direction: directionOf(call),
+        direction: mode === "metro" ? directionOf(call) : null,
+        quay: String(call.quay?.publicCode || "").trim(),
         expected: expected.toISOString(),
         delayMin: Math.max(0, Math.round((expected - aimed) / 60_000)),
         realtime: Boolean(call.realtime),
@@ -131,7 +136,8 @@ async function loadDepartures() {
     .filter(dep => !Number.isNaN(Date.parse(dep.expected)))
     .sort((a, b) => Date.parse(a.expected) - Date.parse(b.expected));
 
-  const situations = [...new Set(departures.map(d => d.situation).filter(Boolean))];
+  // Tickeren på tavla gjelder T-banen; bussavvik vises bare i vinduet.
+  const situations = [...new Set(departures.filter(d => d.mode === "metro").map(d => d.situation).filter(Boolean))];
   return { departures, situations };
 }
 
@@ -149,10 +155,10 @@ async function loadWeather() {
     longitude: String(COORDS.longitude),
     current: "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,precipitation,is_day",
     hourly: "temperature_2m,precipitation,weather_code,is_day",
-    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,sunrise,sunset",
+    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset",
     timezone: "Europe/Oslo",
     timeformat: "unixtime",
-    forecast_days: "3",
+    forecast_days: "7",
     wind_speed_unit: "ms",
   });
   const response = await fetchWithTimeout("https://api.open-meteo.com/v1/forecast?" + query);
@@ -182,12 +188,13 @@ async function loadWeather() {
     return best;
   };
 
-  const days = p.daily.time.slice(0, 2).map((t, i) => ({
+  const days = p.daily.time.map((t, i) => ({
     date: t * 1000,
     code: dominantCode(t * 1000, p.daily.weather_code[i]),
     max: p.daily.temperature_2m_max[i],
     min: p.daily.temperature_2m_min[i],
     rain: p.daily.precipitation_sum[i],
+    rainChance: p.daily.precipitation_probability_max?.[i] ?? null,
     wind: p.daily.wind_speed_10m_max[i],
     sunrise: p.daily.sunrise[i] * 1000,
     sunset: p.daily.sunset[i] * 1000,
@@ -203,8 +210,8 @@ async function loadWeather() {
       day: p.current.is_day === 1,
     },
     days,
-    // Klienten klipper til «24 t fra nå» selv; vi sender litt ekstra.
-    hourly: hourly.filter(h => h.t >= Date.now() - 3_600_000).slice(0, 30),
+    // Tavla viser 24 t og vinduet 48 t; klienten klipper selv.
+    hourly: hourly.filter(h => h.t >= Date.now() - 3_600_000).slice(0, 50),
   };
 }
 
@@ -227,6 +234,14 @@ function xmlTag(block, tag) {
   return match ? decodeXml(match[1]) : "";
 }
 
+function xmlAttr(block, tag, attr) {
+  const match = block.match(new RegExp(`<${tag}\\b[^>]*\\b${attr}="([^"]*)"`, "i"));
+  return match ? decodeXml(match[1]) : "";
+}
+
+// Lenker og bilder går rett til nettleseren, så bare https slipper gjennom.
+const httpsOnly = url => (/^https:\/\//i.test(url) ? url : "");
+
 // digi.no-strømmen har 150+ saker i forsideorden; vi sorterer på tid og tar de nyeste.
 async function loadFeed(url) {
   const response = await fetchWithTimeout(url);
@@ -236,6 +251,10 @@ async function loadFeed(url) {
       title: xmlTag(block, "title"),
       summary: xmlTag(block, "description"),
       published: Date.parse(xmlTag(block, "pubDate")) || 0,
+      link: httpsOnly(xmlTag(block, "link")),
+      // NRK bruker media:content, digi.no enclosure.
+      image: httpsOnly(xmlAttr(block, "media:content", "url") || xmlAttr(block, "enclosure", "url")),
+      kicker: xmlTag(block, "lab:kicker"),
     }))
     .filter(item => item.title)
     .sort((a, b) => b.published - a.published)

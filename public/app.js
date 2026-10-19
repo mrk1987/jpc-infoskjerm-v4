@@ -166,7 +166,8 @@ function renderDirection(column, departures, now) {
 function renderBoard(now = Date.now()) {
   const body = state.departures;
   if (!body?.data) return;
-  const all = body.data.departures;
+  // Bussene er med i svaret for vinduets del; tavla viser bare T-banen.
+  const all = body.data.departures.filter(d => !d.mode || d.mode === "metro");
   renderDirection($("dir-sentrum"), all.filter(d => d.direction === "sentrum"), now);
   renderDirection($("dir-mortensrud"), all.filter(d => d.direction === "mortensrud"), now);
   markStale($("board"), body);
@@ -183,7 +184,7 @@ function renderBoard(now = Date.now()) {
 
 async function loadDepartures() {
   const body = await getJson("/api/departures", "departures");
-  if (body) { state.departures = body; renderBoard(); }
+  if (body) { state.departures = body; renderBoard(); refreshPanel("board"); }
 }
 
 /* ---------- Vær ---------- */
@@ -250,7 +251,7 @@ function renderWeather() {
   if (current.rain > 0) bits.push(`${current.rain.toLocaleString("no-NO")} mm nå`);
   $("wx-meta").textContent = bits.join(", ");
 
-  const rows = days.map((d, i) => {
+  const rows = days.slice(0, 2).map((d, i) => {
     const label = i === 0 ? "I dag" : "I morgen";
     const rain = d.rain >= 0.1 ? `, ${d.rain.toLocaleString("no-NO", { maximumFractionDigits: 1 })} mm` : "";
     return `<dt>${label}</dt><dd>${Math.round(d.max)}° <span class="lo">/ ${Math.round(d.min)}°${rain}</span></dd>`;
@@ -260,7 +261,7 @@ function renderWeather() {
 
   const now = Date.now();
   const series = hourly.filter(h => h.t >= now - 3_600_000).slice(0, 25);
-  renderChart(series);
+  renderChart($("wx-chart"), series);
 }
 
 function smoothPath(points) {
@@ -278,8 +279,9 @@ function smoothPath(points) {
   return d;
 }
 
-function renderChart(series) {
-  const svg = $("wx-chart");
+// every: hvor mange timer mellom etikettene. dayLabels: delelinje og ukedag
+// ved midnatt, for grafer som går over mer enn ett døgn.
+function renderChart(svg, series, { every = 3, dayLabels = false, gradId = "tfill" } = {}) {
   if (series.length < 2) { svg.innerHTML = ""; return; }
 
   const W = 952, top = 44, bottom = 118, labelY = 146;
@@ -310,13 +312,23 @@ function renderChart(series) {
 
   const pts = series.map((h, i) => [x(i), y(h.temp)]);
   const line = smoothPath(pts);
-  out += `<defs><linearGradient id="tfill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8fd0ff" stop-opacity=".28"/><stop offset="1" stop-color="#8fd0ff" stop-opacity="0"/></linearGradient></defs>`;
-  out += `<path d="${line} L${W},${bottom} L0,${bottom} Z" fill="url(#tfill)"/>`;
+  if (dayLabels) {
+    series.forEach((h, i) => {
+      const t = new Date(h.t);
+      if (i === 0 || t.getHours() !== 0) return;
+      const name = WEEKDAYS[t.getDay()];
+      out += `<line x1="${x(i).toFixed(1)}" x2="${x(i).toFixed(1)}" y1="${top - 30}" y2="${bottom}" stroke="var(--faint)" stroke-opacity=".6" stroke-dasharray="3 6" stroke-width="2"/>`;
+      out += `<text x="${(x(i) + 10).toFixed(1)}" y="${bottom - 10}" font-size="19" font-weight="700" fill="var(--muted)">${name[0].toUpperCase() + name.slice(1)}</text>`;
+    });
+  }
+
+  out += `<defs><linearGradient id="${gradId}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8fd0ff" stop-opacity=".28"/><stop offset="1" stop-color="#8fd0ff" stop-opacity="0"/></linearGradient></defs>`;
+  out += `<path d="${line} L${W},${bottom} L0,${bottom} Z" fill="url(#${gradId})"/>`;
   out += `<path d="${line}" fill="none" stroke="var(--sky)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
 
   // Temperatur og ikon hver tredje time, klokkeslett under.
   series.forEach((h, i) => {
-    if (i % 3 !== 0) return;
+    if (i % every !== 0) return;
     const t = new Date(h.t);
     const cx = Math.min(Math.max(x(i), 22), W - 22);
     out += `<text x="${cx}" y="${labelY}" text-anchor="middle" font-size="20" font-weight="600" fill="var(--faint)">${i === 0 ? "Nå" : pad(t.getHours())}</text>`;
@@ -330,7 +342,7 @@ function renderChart(series) {
 
 async function loadWeather() {
   const body = await getJson("/api/weather", "weather");
-  if (body) { state.weather = body; renderWeather(); }
+  if (body) { state.weather = body; renderWeather(); refreshPanel("weather"); }
 }
 
 /* ---------- Lunsj ---------- */
@@ -511,6 +523,7 @@ async function loadOffice() {
   renderNotice();
   renderCountdown();
   fitNews();
+  refreshPanel("lunch");
 }
 
 /* ---------- Nyheter ---------- */
@@ -627,6 +640,451 @@ async function loadNews() {
   }
 }
 
+/* ---------- Utvidede vinduer ---------- */
+
+// Skjermen er en berøringsskjerm i gangen. Et trykk på et panel løfter det ut
+// som et vindu over resten av skjermen. Folk går fra skjermen midt i, så et
+// vindu som står urørt lukker seg selv; ringen rundt krysset viser hvor lenge
+// det er igjen, og hver berøring starter den på nytt.
+const PANEL_IDLE_MS = 3 * 60_000;
+const PANEL_MARGIN = 40;
+const PANEL_W = 1080 - 2 * PANEL_MARGIN;
+const PANEL_MAX_H = 1920 - 2 * PANEL_MARGIN;
+const PANEL_EASE = "cubic-bezier(.2, .8, .2, 1)";
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const PANELS = {
+  board: {
+    source: () => $("board"),
+    title: "Avganger fra Skullerud",
+    skin: "led",
+    render: renderBoardPanel,
+  },
+  weather: {
+    source: () => $("weather"),
+    title: "Været på Skullerud",
+    render: renderWeatherPanel,
+  },
+  lunch: {
+    source: () => $("lunch"),
+    title: "Ukemeny",
+    render: renderLunchPanel,
+  },
+  nrk: {
+    source: () => document.querySelector('.news-col[data-feed="nrk"]'),
+    title: "NRK",
+    full: true,
+    render: body => renderNewsPanel(body, "nrk"),
+  },
+  digi: {
+    source: () => document.querySelector('.news-col[data-feed="digi"]'),
+    title: "digi.no",
+    full: true,
+    render: body => renderNewsPanel(body, "digi"),
+  },
+};
+
+const PANEL_HTML = `
+  <div class="xp-backdrop"></div>
+  <div class="xp-box">
+    <div class="xp-inner">
+      <header class="xp-head">
+        <div><h2 id="xp-title"></h2><p class="xp-sub" id="xp-sub"></p></div>
+        <button class="xp-close" type="button" aria-label="Lukk">
+          <svg viewBox="0 0 80 80" aria-hidden="true">
+            <circle class="xp-ring-bg" cx="40" cy="40" r="36"/>
+            <circle class="xp-ring" cx="40" cy="40" r="36"/>
+            <path d="M29 29L51 51M51 29L29 51"/>
+          </svg>
+        </button>
+      </header>
+      <div class="xp-body"></div>
+    </div>
+  </div>`;
+
+let panel = null;
+
+// Posisjon i lerretets egne piksler (1080 × 1920), uavhengig av skaleringen.
+function rectIn(node) {
+  const s = $("screen").getBoundingClientRect();
+  const r = node.getBoundingClientRect();
+  return {
+    left: (r.left - s.left) / currentScale,
+    top: (r.top - s.top) / currentScale,
+    width: r.width / currentScale,
+    height: r.height / currentScale,
+  };
+}
+
+const px = rect => Object.fromEntries(Object.entries(rect).map(([k, v]) => [k, v + "px"]));
+
+function openPanel(key) {
+  if (panel) return;
+  const def = PANELS[key];
+  const source = def.source();
+  if (!source || source.hidden) return;
+
+  const root = el("div", "xp", PANEL_HTML);
+  root.setAttribute("role", "dialog");
+  root.setAttribute("aria-modal", "true");
+  root.setAttribute("aria-labelledby", "xp-title");
+  root.style.setProperty("--idle", PANEL_IDLE_MS / 1000 + "s");
+  const box = root.querySelector(".xp-box");
+  const inner = root.querySelector(".xp-inner");
+  const body = root.querySelector(".xp-body");
+  if (def.skin) box.classList.add("xp-" + def.skin);
+  root.querySelector("#xp-title").textContent = def.title;
+  $("screen").append(root);
+
+  panel = { key, def, root, box, inner, body, source, state: {} };
+  def.render(body);
+
+  // Mål innholdets naturlige høyde i full bredde før animasjonen starter.
+  Object.assign(box.style, { left: PANEL_MARGIN + "px", top: "0px", width: PANEL_W + "px", height: "auto", visibility: "hidden" });
+  const height = def.full ? PANEL_MAX_H : Math.min(Math.ceil(inner.scrollHeight), PANEL_MAX_H);
+  inner.style.height = height + "px";
+  const to = { left: PANEL_MARGIN, top: Math.round((1920 - height) / 2), width: PANEL_W, height };
+  const from = rectIn(source);
+  Object.assign(box.style, px(to), { visibility: "" });
+  panel.to = to;
+  updateScrollHint();
+
+  source.classList.add("xp-source");
+  const radius = getComputedStyle(source).borderRadius || "0px";
+  const duration = reduceMotion ? 0 : 480;
+  box.animate([{ ...px(from), borderRadius: radius }, { ...px(to), borderRadius: "32px" }], { duration, easing: PANEL_EASE });
+  inner.animate([{ opacity: 0 }, { opacity: 0, offset: .3 }, { opacity: 1 }], { duration, easing: "ease-out" });
+  root.querySelector(".xp-backdrop").animate([{ opacity: 0 }, { opacity: 1 }], { duration: duration * .8 });
+
+  root.querySelector(".xp-backdrop").addEventListener("click", closePanel);
+  root.querySelector(".xp-close").addEventListener("click", closePanel);
+  for (const type of ["pointerdown", "wheel", "keydown"]) root.addEventListener(type, armIdle, { passive: true });
+  body.addEventListener("scroll", () => { armIdle(); updateScrollHint(); }, { passive: true });
+  root.querySelector(".xp-close").focus({ preventScroll: true });
+  armIdle();
+}
+
+function closePanel() {
+  if (!panel || panel.closing) return;
+  const p = panel;
+  p.closing = true;
+  clearTimeout(p.timer);
+  const radius = getComputedStyle(p.source).borderRadius || "0px";
+  const duration = reduceMotion ? 0 : 380;
+  const shrink = p.box.animate(
+    [{ ...px(p.to), borderRadius: "32px" }, { ...px(rectIn(p.source)), borderRadius: radius }],
+    { duration, easing: PANEL_EASE, fill: "forwards" });
+  p.inner.animate([{ opacity: 1 }, { opacity: 0, offset: .35 }, { opacity: 0 }], { duration, fill: "forwards" });
+  p.root.querySelector(".xp-backdrop").animate([{ opacity: 1 }, { opacity: 0 }], { duration, fill: "forwards" });
+  shrink.onfinish = () => {
+    p.root.remove();
+    p.source.classList.remove("xp-source");
+    if (panel === p) panel = null;
+  };
+}
+
+function armIdle() {
+  if (!panel || panel.closing) return;
+  clearTimeout(panel.timer);
+  panel.timer = setTimeout(closePanel, PANEL_IDLE_MS);
+  const ring = panel.root.querySelector(".xp-ring");
+  ring.classList.remove("run");
+  void ring.getBoundingClientRect();
+  ring.classList.add("run");
+}
+
+// Toning nederst viser at det er mer å bla til, og forsvinner på bunnen.
+function updateScrollHint() {
+  if (!panel) return;
+  const b = panel.body;
+  panel.box.classList.toggle("more-below", b.scrollHeight - b.scrollTop - b.clientHeight > 4);
+}
+
+function refreshPanel(key) {
+  if (panel?.key !== key || panel.closing) return;
+  const top = panel.body.scrollTop;
+  panel.def.render(panel.body);
+  panel.body.scrollTop = top;
+  updateScrollHint();
+}
+
+function setPanelSub(value) {
+  if (panel) panel.root.querySelector("#xp-sub").textContent = value;
+}
+
+function clockText(ms) {
+  const d = new Date(ms);
+  return pad(d.getHours()) + ":" + pad(d.getMinutes());
+}
+
+/* ----- Avganger: T-bane i to retninger, buss under ----- */
+
+function depRow(dep, now, withQuay) {
+  const li = el("li");
+  const late = dep.delayMin >= 2 || dep.cancelled;
+  if (late) li.classList.add("is-late");
+  if (!dep.cancelled && minutesUntil(dep.expected, now) <= 0) li.classList.add("is-now");
+  li.append(text("span", "badge " + (dep.mode === "bus" ? "bus" : "metro"), dep.line));
+  li.append(text("span", "dest", dep.destination));
+  if (withQuay) li.append(text("span", "quay", dep.quay ? "Plattform " + dep.quay : ""));
+  const when = el("span", "when");
+  when.append(document.createTextNode(laterWhenText(dep, now)));
+  if (late && !dep.cancelled) when.append(text("small", "", `+${dep.delayMin}`));
+  li.append(when);
+  return li;
+}
+
+function renderBoardPanel(body, now = Date.now()) {
+  const data = state.departures?.data;
+  if (!data) { body.replaceChildren(text("p", "xp-empty", "Henter avganger")); return; }
+  setPanelSub("T-bane og buss, sanntid fra Entur");
+
+  const upcoming = data.departures.filter(d => Date.parse(d.expected) - now > -30_000);
+  const metro = upcoming.filter(d => !d.mode || d.mode === "metro");
+  const bus = upcoming.filter(d => d.mode === "bus");
+
+  const wrap = el("div", "xp-dep");
+  wrap.append(el("h3", "xp-h", '<span class="badge metro">T</span>T-bane'));
+  const cols = el("div", "xp-dep-cols");
+  for (const [dir, label] of [["sentrum", "Mot sentrum"], ["mortensrud", "Mot Mortensrud"]]) {
+    const col = el("div", "xp-dep-col");
+    const list = el("ol", "dep-list");
+    const deps = metro.filter(d => d.direction === dir).slice(0, 8);
+    deps.forEach(d => list.append(depRow(d, now, false)));
+    if (!deps.length) list.append(text("li", "dep-empty", "Ingen avganger"));
+    col.append(text("h4", "", label), list);
+    cols.append(col);
+  }
+  wrap.append(cols);
+
+  wrap.append(el("h3", "xp-h", '<span class="badge bus">B</span>Buss'));
+  const busList = el("ol", "dep-list bus");
+  bus.slice(0, 14).forEach(d => busList.append(depRow(d, now, true)));
+  if (!bus.length) busList.append(text("li", "dep-empty", "Ingen bussavganger"));
+  wrap.append(busList);
+
+  const situations = [...new Set(upcoming.map(d => d.situation).filter(Boolean))];
+  if (situations.length) {
+    wrap.append(text("h3", "xp-h", "Avvik"));
+    const list = el("ul", "xp-sit");
+    situations.forEach(s => list.append(text("li", "", s)));
+    wrap.append(list);
+  }
+  body.replaceChildren(wrap);
+}
+
+/* ----- Vær: nå, 48 timer og sju dager ----- */
+
+function renderWeatherPanel(body) {
+  const w = state.weather;
+  if (!w?.data) { body.replaceChildren(text("p", "xp-empty", "Henter været")); return; }
+  const { current, days, hourly } = w.data;
+  setPanelSub(w.fetchedAt ? `Prognose fra Open-Meteo, oppdatert ${clockText(Date.parse(w.fetchedAt))}` : "Prognose fra Open-Meteo");
+
+  const hero = el("div", "xp-wx-hero");
+  hero.append(el("div", "wx-icon", wxIcon(current.code, current.day)), text("div", "big", Math.round(current.temp) + "°"));
+  const words = el("div");
+  words.append(text("p", "cond", WX_TEXT[current.code] || "Ukjent vær"));
+  const today = days[0];
+  if (today) words.append(text("p", "range", `I dag ${Math.round(today.max)}° / ${Math.round(today.min)}°`));
+  hero.append(words);
+
+  const facts = el("div", "xp-facts");
+  const fact = (value, label) => { const f = el("div", "xp-fact"); f.append(text("b", "", value), text("span", "", label)); facts.append(f); };
+  fact(Math.round(current.feels) + "°", "Føles som");
+  fact(Math.round(current.wind) + " m/s", "Vind nå");
+  fact(current.rain.toLocaleString("no-NO") + " mm", "Nedbør nå");
+  if (today?.sunrise) fact(`${clockText(today.sunrise)}–${clockText(today.sunset)}`, "Sol opp og ned");
+
+  const chart = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  chart.setAttribute("viewBox", "0 0 952 150");
+  chart.classList.add("xp-chart");
+  const series = hourly.filter(h => h.t >= Date.now() - 3_600_000).slice(0, 49);
+  renderChart(chart, series, { every: 4, dayLabels: true, gradId: "tfill-xp" });
+
+  const lo = Math.min(...days.map(d => d.min));
+  const hi = Math.max(...days.map(d => d.max));
+  const span = Math.max(1, hi - lo);
+  const week = el("ol", "xp-week");
+  days.forEach((d, i) => {
+    const date = new Date(d.date);
+    const name = WEEKDAYS[date.getDay()];
+    const label = i === 0 ? "I dag" : i === 1 ? "I morgen" : name[0].toUpperCase() + name.slice(1);
+    const li = el("li");
+    li.append(text("span", "wk-day", label));
+    li.append(el("span", "wk-icon", wxIcon(d.code, true)));
+    const rain = d.rain >= 0.1 ? `${d.rain.toLocaleString("no-NO", { maximumFractionDigits: 1 })} mm` : "Opphold";
+    li.append(text("span", "wk-rain" + (d.rain >= 0.1 ? " wet" : ""), d.rainChance != null && d.rain >= 0.1 ? `${rain}, ${d.rainChance} %` : rain));
+    li.append(text("span", "wk-lo", Math.round(d.min) + "°"));
+    const bar = el("span", "wk-bar", "<i></i>");
+    bar.style.setProperty("--a", ((d.min - lo) / span) * 100 + "%");
+    bar.style.setProperty("--b", ((hi - d.max) / span) * 100 + "%");
+    li.append(bar, text("span", "wk-hi", Math.round(d.max) + "°"), text("span", "wk-wind", Math.round(d.wind) + " m/s"));
+    week.append(li);
+  });
+
+  body.replaceChildren(hero, facts, text("h3", "xp-h", "Neste 48 timer"), chart,
+    text("h3", "xp-h", `${days.length} dager`), week);
+}
+
+/* ----- Lunsj: hele uka ----- */
+
+const MONTHS_SHORT = ["jan.", "feb.", "mars", "apr.", "mai", "juni", "juli", "aug.", "sep.", "okt.", "nov.", "des."];
+
+function renderLunchPanel(body, now = new Date()) {
+  const office = state.office?.data;
+  if (!office) { body.replaceChildren(text("p", "xp-empty", "Henter menyen")); return; }
+  const menu = office.menu;
+  const week = isoWeek(now);
+  if (!menu || menu.week !== week) {
+    setPanelSub(`Uke ${week}`);
+    body.replaceChildren(text("p", "xp-empty", `Menyen for uke ${week} er ikke lagt inn ennå`));
+    return;
+  }
+  setPanelSub(`Uke ${menu.week}, servering 11:00–13:00` + (office.menuSource === "intranet" ? ", fra Skullerud Park" : ""));
+
+  const monday = new Date(now);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const status = lunchStatus(now);
+  const list = el("ol", "xp-menu");
+
+  for (let day = 1; day <= 5; day++) {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + day - 1);
+    const isToday = date.toDateString() === now.toDateString();
+    const entry = menu.days.find(d => d.day === day);
+    const li = el("li");
+    if (isToday) li.classList.add("today");
+    else if (date < now) li.classList.add("past");
+
+    const when = el("div", "day");
+    const name = WEEKDAYS[date.getDay()];
+    when.append(text("span", "day-name", name[0].toUpperCase() + name.slice(1)),
+      text("span", "day-date", `${date.getDate()}. ${MONTHS_SHORT[date.getMonth()]}`));
+    if (isToday) when.append(text("span", "pill" + (status.live ? " live" : ""), status.live ? "Serveres nå" : "I dag"));
+
+    const dish = el("div", "what");
+    if (isHoliday(date)) {
+      dish.append(text("p", "closed", "Stengt, helligdag"));
+      li.classList.add("holiday");
+    } else if (entry) {
+      const { main, sub } = splitDish(entry.title);
+      dish.append(text("p", "main", main));
+      if (sub) dish.append(text("p", "sub", sub));
+      if (entry.allergens) dish.append(text("p", "aller", "Allergener: " + entry.allergens));
+    } else {
+      dish.append(text("p", "closed", "Ikke lagt inn"));
+    }
+    li.append(when, dish);
+    list.append(li);
+  }
+  body.replaceChildren(list);
+}
+
+/* ----- Nyheter: valgt sak stort, resten som liste ----- */
+
+// QR-koden lar folk ta med seg saken på mobilen. Skjermen selv navigerer
+// aldri bort, ellers ville den bli stående på en nettavis.
+function qrSvg(url) {
+  if (!url || typeof window.qrcode !== "function") return "";
+  try {
+    const qr = window.qrcode(0, "M");
+    qr.addData(url);
+    qr.make();
+    const n = qr.getModuleCount();
+    let d = "";
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += `M${c} ${r}h1v1h-1z`;
+    return `<svg viewBox="-3 -3 ${n + 6} ${n + 6}" shape-rendering="crispEdges" aria-hidden="true">` +
+      `<rect x="-3" y="-3" width="${n + 6}" height="${n + 6}" fill="#fff"/><path d="${d}" fill="#0a1220"/></svg>`;
+  } catch (error) {
+    console.warn("QR: " + error.message);
+    return "";
+  }
+}
+
+function newsImage(src, className) {
+  const img = el("img", className);
+  img.alt = "";
+  img.decoding = "async";
+  img.referrerPolicy = "no-referrer";
+  img.addEventListener("error", () => img.classList.add("broken"));
+  img.src = src;
+  return img;
+}
+
+function renderNewsPanel(body, feed) {
+  const items = state.news[feed] || [];
+  if (!items.length) { body.replaceChildren(text("p", "xp-empty", "Ingen saker tilgjengelig akkurat nå")); return; }
+  const ps = panel.state;
+  // Vinduet åpner på saken som står på skjermen akkurat nå.
+  if (ps.featured === undefined) ps.featured = state.newsIndex[feed] % items.length;
+  const item = items[ps.featured] || items[0];
+  setPanelSub(`Siste nytt, ${items.length} saker`);
+
+  const feature = el("article", "xp-feature");
+  if (item.image) feature.append(newsImage(item.image, "hero"));
+  const textCol = el("div", "xp-feature-text");
+  textCol.append(text("span", "time", [newsTime(item.published), item.kicker].filter(Boolean).join("  ·  ")));
+  textCol.append(text("h3", "", item.title));
+  // NRK sender hele notisen med linjeskift mellom avsnittene.
+  for (const para of (item.summary || "").split(/\n+/).map(s => s.trim()).filter(Boolean)) {
+    textCol.append(text("p", "xp-summary", para));
+  }
+  const grid = el("div", "xp-feature-body");
+  grid.append(textCol);
+  const qr = qrSvg(item.link);
+  if (qr) {
+    const box = el("div", "xp-qr", qr);
+    box.append(text("p", "", "Les hele saken på mobilen"));
+    grid.append(box);
+  } else {
+    grid.classList.add("no-qr");
+  }
+  feature.append(grid);
+
+  const list = el("ol", "xp-news-list");
+  items.forEach((other, i) => {
+    if (i === ps.featured) return;
+    const li = el("li");
+    li.tabIndex = 0;
+    li.setAttribute("role", "button");
+    li.append(other.image ? newsImage(other.image, "thumb") : el("span", "thumb"));
+    const words = el("div");
+    words.append(text("span", "time", newsTime(other.published)), text("p", "t", other.title));
+    if (other.summary) words.append(text("p", "s", other.summary));
+    li.append(words);
+    const pick = () => {
+      ps.featured = i;
+      renderNewsPanel(body, feed);
+      body.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+    };
+    li.addEventListener("click", pick);
+    li.addEventListener("keydown", e => { if (e.key === "Enter") pick(); });
+    list.append(li);
+  });
+
+  body.replaceChildren(feature, text("h3", "xp-h", "Flere saker"), list);
+}
+
+/* ----- Gjør panelene trykkbare ----- */
+
+for (const [key, def] of Object.entries(PANELS)) {
+  const node = def.source();
+  node.classList.add("expandable");
+  node.tabIndex = 0;
+  node.setAttribute("role", "button");
+  node.setAttribute("aria-haspopup", "dialog");
+  node.setAttribute("aria-label", `Åpne ${def.title}`);
+  node.addEventListener("click", () => openPanel(key));
+  node.addEventListener("keydown", event => {
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openPanel(key); }
+  });
+}
+
+// Langt trykk på berøringsskjermen skal ikke åpne kontekstmenyen.
+document.addEventListener("contextmenu", event => event.preventDefault());
+
 /* ---------- Versjon og vedlikehold ---------- */
 
 let knownVersion = null;
@@ -655,6 +1113,7 @@ function refreshAll() {
 
 document.addEventListener("keydown", event => {
   const key = event.key.toLowerCase();
+  if (event.key === "Escape") closePanel();
   if (key === "r") refreshAll();
   if (key === "f") {
     if (document.fullscreenElement) document.exitFullscreen?.();
@@ -670,15 +1129,26 @@ function tick() {
   renderCountdown(now.getTime());
   // Minuttene på tavla regnes fra forventet avgang hvert sekund, ikke bare
   // når dataene hentes, så «2 min» blir «1 min» i riktig øyeblikk.
-  if (now.getSeconds() % 5 === 0) renderBoard(now.getTime());
+  if (now.getSeconds() % 5 === 0) {
+    renderBoard(now.getTime());
+    refreshPanel("board");
+  }
   if (now.getSeconds() === 0) {
     renderLunch(now);
+    refreshPanel("lunch");
     if (now.getMinutes() % 15 === 0) renderWeather();
   }
 }
 
 // Feiler et bilde, stilark eller skript (typisk midt i en utrulling), lastes
 // siden på nytt etter et minutt, høyst tre ganger på rad.
+// Bare egne filer teller. Nyhetsbilder fra NRK og digi.no kan feile uten at
+// siden skal lastes på nytt.
+function ownAsset(node) {
+  if (!(node instanceof HTMLElement) || !/^(IMG|SCRIPT|LINK)$/.test(node.tagName)) return false;
+  try { return new URL(node.src || node.href, location.href).origin === location.origin; } catch { return false; }
+}
+
 let assetFailed = false;
 function retryAfterAssetError() {
   if (assetFailed) return;
@@ -690,10 +1160,10 @@ function retryAfterAssetError() {
   setTimeout(() => location.reload(), 60_000);
 }
 window.addEventListener("error", event => {
-  if (event.target instanceof HTMLElement && /^(IMG|SCRIPT|LINK)$/.test(event.target.tagName)) retryAfterAssetError();
+  if (ownAsset(event.target)) retryAfterAssetError();
 }, true);
 // Bildet kan ha feilet før dette skriptet kjørte.
-document.querySelectorAll("img").forEach(img => { if (img.complete && img.naturalWidth === 0) retryAfterAssetError(); });
+document.querySelectorAll("img").forEach(img => { if (ownAsset(img) && img.complete && img.naturalWidth === 0) retryAfterAssetError(); });
 // Telleren nullstilles bare etter en innlasting uten feil.
 setTimeout(() => { if (!assetFailed) try { sessionStorage.removeItem("jpc-asset-retries"); } catch {} }, 5 * 60_000);
 
