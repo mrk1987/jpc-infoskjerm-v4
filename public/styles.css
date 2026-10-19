@@ -519,10 +519,11 @@ ol, ul { list-style: none; }
   padding: 22px 26px 18px;
 }
 .news-col h2 { color: var(--text); font-weight: 700; }
-/* Liten QR-kode til saken som vises, øverst til høyre i kortet. Overskriften
-   «NRK»/«ITavisen» står øverst ved siden av den. */
-.news-col header { align-items: flex-start; }
-.news-qr { flex: none; width: 84px; height: 84px; }
+/* Liten QR-kode til saken som vises, festet øverst til høyre i kortet. Den
+   ligger utenfor flyten, i det tomme hjørnet ved siden av «NRK» og
+   klokkeslettet, så overskrift og liste står like tett som uten den. */
+.news-col { position: relative; }
+.news-qr { position: absolute; top: 16px; right: 18px; width: 78px; height: 78px; }
 .news-qr svg { display: block; width: 100%; height: 100%; border-radius: 8px; }
 
 .news-stage {
