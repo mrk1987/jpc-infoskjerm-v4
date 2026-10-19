@@ -15,7 +15,7 @@ avgangstavle i LED-stil. Etterfølger av
   hvert sekund fra forventet avgangstid, ikke bare ved hver henting. Forsinkelser og innstilte
   avganger vises i rødt, og avviksmeldinger fra Entur ruller nederst på tavla.
 - **Værgraf for neste 24 timer** med temperatur, nedbør, natt og ikoner hver tredje time.
-- **Nyheter én om gangen**, store nok til å leses på avstand, med ingress og de to neste i kø.
+- **Nyheter i to kolonner**, NRK til venstre og digi.no til høyre. Hver kolonne viser én sak om gangen med ingress, og resten av plassen fylles med de neste sakene. Kolonnene bytter sak forskjøvet med seks sekunder.
 - **Lunsj bytter til neste arbeidsdag** etter servering, og hopper over helg og helligdager.
 - **Utløpt nedtelling skjules** i stedet for å stå på 00 00 00 00.
 - **Automatisk omlasting** når en ny versjon deployes, og hver natt kl. 04.
@@ -68,7 +68,7 @@ Kilden kan overstyres med miljøvariablene `CONTENT_REPO` og `CONTENT_BRANCH`.
 |---|---|---|
 | `/api/departures` | Entur GraphQL, Skullerud (NSR:StopPlace:58227) | 20 sek |
 | `/api/weather` | Open-Meteo, 59.8667, 10.8400 | 10 min |
-| `/api/news` | NRK siste nytt (RSS) | 5 min |
+| `/api/news` | NRK siste nytt og digi.no (RSS), hver strøm for seg | 5 min |
 | `/api/office` | Meny, avstemning, beskjed og nedtelling fra originalrepoet | 3 min |
 | `/api/version` | Hash av frontend-filene | — |
 | `/healthz` | Helsesjekk for Docker og Coolify | — |

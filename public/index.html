@@ -56,7 +56,7 @@
         </div>
       </div>
       <dl class="wx-days" id="wx-days"></dl>
-      <svg class="wx-chart" id="wx-chart" viewBox="0 0 952 170" aria-hidden="true"></svg>
+      <svg class="wx-chart" id="wx-chart" viewBox="0 0 952 150" aria-hidden="true"></svg>
     </section>
 
     <section class="midrow" id="midrow">
@@ -85,14 +85,25 @@
       <p class="notice-msg" id="notice-msg"></p>
     </aside>
 
-    <section class="news" id="news" aria-label="Siste nytt fra NRK">
-      <header>
-        <h2>Siste nytt fra NRK</h2>
-        <span class="news-count" id="news-count"></span>
-      </header>
-      <div class="news-stage" id="news-stage"></div>
-      <div class="news-progress"><i id="news-progress"></i></div>
-      <ol class="news-queue" id="news-queue"></ol>
+    <section class="news" id="news" aria-label="Siste nytt">
+      <div class="news-col" data-feed="nrk">
+        <header>
+          <h2>NRK</h2>
+          <span class="news-count"></span>
+        </header>
+        <div class="news-stage"></div>
+        <div class="news-progress"><i></i></div>
+        <ol class="news-queue"></ol>
+      </div>
+      <div class="news-col" data-feed="digi">
+        <header>
+          <h2>digi.no</h2>
+          <span class="news-count"></span>
+        </header>
+        <div class="news-stage"></div>
+        <div class="news-progress"><i></i></div>
+        <ol class="news-queue"></ol>
+      </div>
     </section>
 
     <footer class="countdown" id="countdown" hidden>

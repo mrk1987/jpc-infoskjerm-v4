@@ -20,7 +20,10 @@ const CONTENT_BRANCH = process.env.CONTENT_BRANCH || "main";
 
 const STOP_ID = "NSR:StopPlace:58227";
 const COORDS = { latitude: 59.866685, longitude: 10.840032 };
-const NRK_FEED = "https://www.nrk.no/nyheter/siste.rss";
+const NEWS_FEEDS = {
+  nrk: "https://www.nrk.no/nyheter/siste.rss",
+  digi: "https://www.digi.no/?lab_viewport=rss",
+};
 const UA = "jpc-infoskjerm/4 (kontorskjerm Skullerud)";
 
 /* ---------- Cache: siste gode verdi overlever feil ---------- */
@@ -205,7 +208,7 @@ async function loadWeather() {
   };
 }
 
-/* ---------- Nyheter (NRK RSS) ---------- */
+/* ---------- Nyheter (NRK og digi.no, RSS) ---------- */
 
 const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
 
@@ -224,8 +227,9 @@ function xmlTag(block, tag) {
   return match ? decodeXml(match[1]) : "";
 }
 
-async function loadNews() {
-  const response = await fetchWithTimeout(NRK_FEED);
+// digi.no-strømmen har 150+ saker i forsideorden; vi sorterer på tid og tar de nyeste.
+async function loadFeed(url) {
+  const response = await fetchWithTimeout(url);
   const xml = await response.text();
   const items = [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)]
     .map(([block]) => ({
@@ -238,6 +242,23 @@ async function loadNews() {
     .slice(0, 12);
   if (!items.length) throw new Error("Tom RSS-strøm");
   return { items };
+}
+
+// Hver strøm caches for seg, så en feil hos den ene ikke tar ned den andre.
+async function loadNews() {
+  const names = Object.keys(NEWS_FEEDS);
+  const results = await Promise.allSettled(
+    names.map(name => cached("news-" + name, 5 * 60_000, () => loadFeed(NEWS_FEEDS[name]))));
+  if (results.every(r => r.status === "rejected")) throw new Error("Ingen nyhetsstrømmer svarte");
+  const data = {};
+  let stale = false, fetchedAt = null;
+  results.forEach((r, i) => {
+    if (r.status !== "fulfilled") { data[names[i]] = null; stale = true; return; }
+    data[names[i]] = r.value.data;
+    stale ||= r.value.stale;
+    if (!fetchedAt || r.value.fetchedAt > fetchedAt) fetchedAt = r.value.fetchedAt;
+  });
+  return { data, fetchedAt, stale };
 }
 
 /* ---------- Kontorinnhold fra originalrepoet ---------- */
@@ -560,7 +581,7 @@ const VERSION = await hashPublicDir();
 const ROUTES = {
   "/api/departures": () => cached("departures", 20_000, loadDepartures),
   "/api/weather": () => cached("weather", 10 * 60_000, loadWeather),
-  "/api/news": () => cached("news", 5 * 60_000, loadNews),
+  "/api/news": loadNews,
   "/api/office": () => cached("office", 3 * 60_000, loadOffice),
   "/api/version": async () => ({ data: { version: VERSION } }),
   "/healthz": async () => ({

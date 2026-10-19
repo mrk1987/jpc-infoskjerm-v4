@@ -75,39 +75,39 @@ ol, ul { list-style: none; }
 
 .brand { display: flex; flex-direction: column; gap: 4px; }
 .wordmark {
-  font-size: 76px;
+  font-size: 60px;
   font-weight: 800;
   letter-spacing: -.02em;
   line-height: .9;
 }
 .place {
-  font-size: 30px;
+  font-size: 25px;
   font-weight: 500;
   color: var(--muted);
 }
 
 .timebox { text-align: right; }
 .clock {
-  font-size: 112px;
+  font-size: 92px;
   font-weight: 700;
   letter-spacing: -.04em;
   line-height: .85;
 }
 .clock .sec {
-  font-size: 44px;
+  font-size: 36px;
   font-weight: 600;
   color: var(--faint);
   letter-spacing: 0;
   margin-left: 10px;
   vertical-align: top;
   display: inline-block;
-  padding-top: 8px;
-  min-width: 56px;
+  padding-top: 6px;
+  min-width: 46px;
   text-align: left;
 }
 .date {
-  margin-top: 14px;
-  font-size: 30px;
+  margin-top: 10px;
+  font-size: 25px;
   font-weight: 500;
   color: var(--muted);
 }
@@ -120,10 +120,10 @@ ol, ul { list-style: none; }
     radial-gradient(circle, rgba(255, 178, 56, .07) 1.1px, transparent 1.6px) 0 0 / 7px 7px,
     #05080e;
   box-shadow: inset 0 0 0 2px #1a2232, inset 0 30px 60px rgba(0, 0, 0, .5);
-  padding: 26px 40px 22px;
+  padding: 22px 36px 20px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .board-head {
@@ -132,7 +132,7 @@ ol, ul { list-style: none; }
   align-items: center;
 }
 .board-head h2 {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 600;
   color: var(--muted);
 }
@@ -165,7 +165,7 @@ ol, ul { list-style: none; }
 .dir + .dir { border-left: 2px dashed rgba(255, 178, 56, .14); padding-left: 44px; }
 
 .dir h3 {
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--text);
   margin-bottom: 8px;
@@ -178,7 +178,7 @@ ol, ul { list-style: none; }
 }
 
 .next {
-  min-height: 160px;
+  min-height: 128px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -186,19 +186,19 @@ ol, ul { list-style: none; }
   border-bottom: 2px solid rgba(255, 178, 56, .14);
 }
 .next .when {
-  font-size: 132px;
+  font-size: 108px;
   font-weight: 900;
   line-height: .95;
   letter-spacing: -.02em;
 }
 .next .when small {
-  font-size: 56px;
+  font-size: 46px;
   font-weight: 800;
   margin-left: 12px;
   letter-spacing: 0;
 }
 .next .dest {
-  font-size: 40px;
+  font-size: 34px;
   font-weight: 800;
   margin-top: 6px;
   display: flex;
@@ -214,8 +214,8 @@ ol, ul { list-style: none; }
   text-shadow: none;
   display: inline-grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   border: 3px solid var(--amber);
   color: var(--amber);
@@ -230,8 +230,8 @@ ol, ul { list-style: none; }
   align-items: baseline;
   padding: 6px 0 0;
 }
-.later .dest { font-size: 36px; font-weight: 800; }
-.later .when { font-size: 40px; font-weight: 900; }
+.later .dest { font-size: 31px; font-weight: 800; }
+.later .when { font-size: 34px; font-weight: 900; }
 
 .late, .next .when.late, .later .when.late {
   color: var(--late);
@@ -286,23 +286,23 @@ ol, ul { list-style: none; }
   align-items: center;
   gap: 22px;
 }
-.wx-icon { width: 92px; height: 92px; flex: none; }
+.wx-icon { width: 80px; height: 80px; flex: none; }
 .wx-icon svg { width: 100%; height: 100%; }
 .wx-temp {
-  font-size: 116px;
+  font-size: 100px;
   font-weight: 700;
   letter-spacing: -.05em;
   line-height: .9;
 }
-.wx-cond { font-size: 36px; font-weight: 700; }
-.wx-meta { font-size: 26px; color: var(--muted); margin-top: 6px; white-space: nowrap; }
+.wx-cond { font-size: 32px; font-weight: 700; }
+.wx-meta { font-size: 24px; color: var(--muted); margin-top: 6px; white-space: nowrap; }
 
 .wx-days {
   display: grid;
   grid-template-columns: auto auto;
   align-content: center;
-  gap: 10px 22px;
-  font-size: 28px;
+  gap: 8px 22px;
+  font-size: 25px;
 }
 .wx-days dt { color: var(--muted); font-weight: 500; }
 .wx-days dd { font-weight: 700; text-align: right; white-space: nowrap; }
@@ -311,7 +311,7 @@ ol, ul { list-style: none; }
 .wx-chart {
   grid-column: 1 / -1;
   width: 100%;
-  height: 170px;
+  height: 150px;
   overflow: visible;
 }
 .wx-chart text { font-family: var(--ui); }
@@ -442,56 +442,68 @@ ol, ul { list-style: none; }
   text-wrap: balance;
 }
 
-/* ---------- Nyheter ---------- */
+/* ---------- Nyheter: NRK til venstre, digi.no til høyre ---------- */
 
 .news {
   flex: 1;
   min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 44px;
+}
+.news-col {
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
-.news-count { font-size: 22px; color: var(--faint); font-weight: 600; }
+.news-col + .news-col { border-left: 2px solid var(--rule); padding-left: 44px; margin-left: -22px; }
+.news-col h2 { color: var(--text); font-weight: 700; }
+.news-count { font-size: 21px; color: var(--faint); font-weight: 600; }
 
 .news-stage {
   display: grid;
-  min-height: 0;
-  flex: 1;
+  flex: 0 0 236px;
   overflow: hidden;
 }
+.news.compact .news-stage { flex: 1 1 auto; min-height: 0; }
 .headline {
   grid-area: 1 / 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   opacity: 0;
   transform: translateY(16px);
   transition: opacity .6s ease, transform .6s ease;
 }
 .headline.on { opacity: 1; transform: none; }
-.headline .time { font-size: 22px; font-weight: 700; color: var(--sky); }
+.headline .time { font-size: 21px; font-weight: 700; color: var(--sky); }
 .headline h3 {
-  font-size: 44px;
+  font-size: 35px;
   font-weight: 800;
-  line-height: 1.08;
-  letter-spacing: -.015em;
+  line-height: 1.1;
+  letter-spacing: -.01em;
   text-wrap: balance;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .headline p {
-  font-size: 26px;
+  font-size: 23px;
   line-height: 1.4;
   color: var(--muted);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  max-width: 64ch;
 }
 
 .news-progress {
   height: 4px;
   border-radius: 2px;
   background: var(--deck-2);
-  margin: 14px 0 12px;
+  margin: 12px 0 8px;
   overflow: hidden;
 }
 .news-progress i {
@@ -506,23 +518,28 @@ ol, ul { list-style: none; }
 @keyframes progress { to { transform: scaleX(1); } }
 
 .news.compact .news-queue, .news.compact .headline p { display: none; }
-.news.compact .headline { gap: 6px; }
+.news.compact .headline { gap: 4px; }
 .news.compact .headline h3 {
-  font-size: 36px;
-  white-space: nowrap;
+  font-size: 30px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
+.news-queue {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
 .news-queue li {
   display: flex;
-  gap: 18px;
-  font-size: 23px;
-  padding: 7px 0;
+  gap: 14px;
+  font-size: 21px;
+  padding: 6px 0;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .news-queue li + li { border-top: 1px solid var(--rule); }
 .news-queue .time { color: var(--faint); font-weight: 600; flex: none; }

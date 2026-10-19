@@ -19,8 +19,8 @@ const MONTHS = ["januar", "februar", "mars", "april", "mai", "juni", "juli",
 const state = {
   departures: null,
   weather: null,
-  news: [],
-  newsIndex: 0,
+  news: { nrk: [], digi: [] },
+  newsIndex: { nrk: 0, digi: 0 },
   office: null,
   health: {},
 };
@@ -155,7 +155,7 @@ function renderDirection(column, departures, now) {
   if (first.delayMin >= 2 && !first.cancelled) dest.append(text("span", "delay-note", `${first.delayMin} min forsinket`));
   next.append(dest);
 
-  for (const dep of rest.slice(0, 3)) {
+  for (const dep of rest.slice(0, 2)) {
     const li = el("li");
     const late = dep.delayMin >= 2 || dep.cancelled;
     li.append(text("span", "dest", dep.destination), text("span", "when" + (late ? " late" : ""), laterWhenText(dep, now)));
@@ -282,7 +282,7 @@ function renderChart(series) {
   const svg = $("wx-chart");
   if (series.length < 2) { svg.innerHTML = ""; return; }
 
-  const W = 952, top = 44, bottom = 136, labelY = 166;
+  const W = 952, top = 44, bottom = 118, labelY = 146;
   const step = W / (series.length - 1);
   const temps = series.map(h => h.temp);
   let lo = Math.floor(Math.min(...temps)) - 1;
@@ -300,7 +300,7 @@ function renderChart(series) {
   // Nedbør som søyler fra bunnlinjen.
   series.forEach((h, i) => {
     if (h.rain < 0.05) return;
-    const hgt = Math.max(3, (h.rain / maxRain) * 70);
+    const hgt = Math.max(3, (h.rain / maxRain) * 56);
     out += `<rect x="${(x(i) - step * 0.32).toFixed(1)}" y="${(bottom - hgt).toFixed(1)}" width="${(step * 0.64).toFixed(1)}" height="${hgt.toFixed(1)}" rx="3" fill="var(--rain)" fill-opacity=".75"/>`;
   });
   out += `<line x1="0" x2="${W}" y1="${bottom}" y2="${bottom}" stroke="var(--rule)" stroke-width="2"/>`;
@@ -518,6 +518,8 @@ async function loadOffice() {
 function newsTime(ms) {
   if (!ms) return "";
   const d = new Date(ms);
+  // digi.no-strømmen har også eldre saker; da er klokkeslett alene misvisende.
+  if (d.toDateString() !== new Date().toDateString()) return `${d.getDate()}.${d.getMonth() + 1}.`;
   return pad(d.getHours()) + ":" + pad(d.getMinutes());
 }
 
@@ -526,23 +528,36 @@ function newsTime(ms) {
 function fitNews() {
   const news = $("news");
   news.classList.remove("compact");
-  if (news.getBoundingClientRect().height / currentScale < 330) news.classList.add("compact");
+  if (news.getBoundingClientRect().height / currentScale < 300) news.classList.add("compact");
+  document.querySelectorAll(".news-queue").forEach(trimQueue);
 }
 
-function showHeadline() {
-  const items = state.news;
-  const stage = $("news-stage");
+const FEEDS = ["nrk", "digi"];
+
+// Køen fyller plassen under overskriften; saker som ikke får plass helt
+// fjernes i stedet for å bli kuttet midt i linja.
+function trimQueue(queue) {
+  const bottom = queue.getBoundingClientRect().bottom;
+  [...queue.children].forEach(li => { if (li.getBoundingClientRect().bottom > bottom + 1) li.remove(); });
+}
+
+function showHeadline(feed, durationMs = NEWS_ROTATION_MS) {
+  const col = document.querySelector(`.news-col[data-feed="${feed}"]`);
+  const items = state.news[feed] || [];
+  const stage = col.querySelector(".news-stage");
   if (!items.length) {
-    stage.replaceChildren(text("p", "", "Ingen nyheter tilgjengelig akkurat nå"));
+    stage.replaceChildren(text("p", "", "Ingen saker tilgjengelig akkurat nå"));
+    col.querySelector(".news-queue").replaceChildren();
     return;
   }
-  const i = state.newsIndex % items.length;
+  const i = state.newsIndex[feed] % items.length;
   const item = items[i];
 
   const card = el("article", "headline");
   card.append(text("span", "time", newsTime(item.published)), text("h3", "", item.title));
   if (item.summary) card.append(text("p", "", item.summary));
   const old = stage.querySelector(".headline.on");
+  stage.querySelectorAll(":scope > :not(.headline)").forEach(n => n.remove());
   stage.append(card);
   requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add("on")));
   if (old) {
@@ -550,32 +565,40 @@ function showHeadline() {
     setTimeout(() => old.remove(), 700);
   }
 
-  $("news-count").textContent = `${i + 1} av ${items.length}`;
+  col.querySelector(".news-count").textContent = `${i + 1} av ${items.length}`;
 
-  const queue = $("news-queue");
+  const queue = col.querySelector(".news-queue");
   queue.replaceChildren();
-  for (let k = 1; k <= 2 && k < items.length; k++) {
+  for (let k = 1; k <= 8 && k < items.length; k++) {
     const next = items[(i + k) % items.length];
     const li = el("li");
     li.append(text("span", "time", newsTime(next.published)), text("span", "t", next.title));
     queue.append(li);
   }
 
-  const bar = $("news-progress");
+  const bar = col.querySelector(".news-progress i");
   bar.classList.remove("run");
   void bar.offsetWidth;
-  bar.style.setProperty("--news-s", NEWS_ROTATION_MS / 1000 + "s");
+  bar.style.setProperty("--news-s", durationMs / 1000 + "s");
   bar.classList.add("run");
   fitNews();
+}
+
+function rotateNews(feed) {
+  state.newsIndex[feed]++;
+  showHeadline(feed);
 }
 
 async function loadNews() {
   const body = await getJson("/api/news", "news");
   if (!body?.data) return;
-  const first = state.news.length === 0;
-  state.news = body.data.items;
   markStale($("news"), body);
-  if (first) showHeadline();
+  for (const feed of FEEDS) {
+    const first = !state.news[feed]?.length;
+    state.news[feed] = body.data[feed]?.items || state.news[feed] || [];
+    // digi bytter første gang etter halvannen periode, se forskyvningen nederst.
+    if (first) showHeadline(feed, feed === "digi" ? NEWS_ROTATION_MS * 1.5 : NEWS_ROTATION_MS);
+  }
 }
 
 /* ---------- Versjon og vedlikehold ---------- */
@@ -643,6 +666,9 @@ setInterval(loadWeather, REFRESH.weather);
 setInterval(loadNews, REFRESH.news);
 setInterval(loadOffice, REFRESH.office);
 setInterval(checkVersion, REFRESH.version);
-setInterval(() => { state.newsIndex++; showHeadline(); }, NEWS_ROTATION_MS);
+// Kolonnene bytter sak forskjøvet med en halv periode, så ikke alt på
+// skjermen beveger seg samtidig.
+setInterval(() => rotateNews("nrk"), NEWS_ROTATION_MS);
+setTimeout(() => setInterval(() => rotateNews("digi"), NEWS_ROTATION_MS), NEWS_ROTATION_MS / 2);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshAll(); });
 scheduleNightlyReload();
