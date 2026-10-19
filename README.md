@@ -23,6 +23,10 @@ avgangstavle i LED-stil. Etterfølger av
   den. Ellers telles det ned til neste røde dag (norske helligdager, de samme som på
   [rodedager.no](https://www.rodedager.no/)): faste datoer pluss dager regnet fra påske, beregnet
   lokalt uten ekstern tjeneste. På selve helligdagen telles det mot den neste.
+  Sammenhengende fri pekes ut som på rodedager.no: «Langhelg: 3 dager fri (fredag–søndag)»,
+  «5 dager fri på rad (torsdag–mandag)» i påsken, og inneklemte dager (én arbeidsdag mellom to
+  fridager, f.eks. fredagen etter Kristi himmelfart): «Inneklemt fredag 15. mai: 4 dager fri med
+  én feriedag». En inneklemt dag som er passert, nevnes ikke.
 - **Automatisk omlasting** når en ny versjon deployes, og hver natt kl. 04.
 - Fast lerret på 1080 × 1920 som skaleres til skjermen, slik at oppsettet er identisk overalt.
 

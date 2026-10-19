@@ -622,6 +622,13 @@ ol, ul { list-style: none; }
   color: var(--muted);
   margin-bottom: 4px;
 }
+.cd-note {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--amber);
+  margin-top: 6px;
+}
 .cd-digits { display: flex; gap: 20px; flex: none; }
 .cd-unit { text-align: center; min-width: 74px; }
 .cd-unit b {

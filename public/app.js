@@ -550,6 +550,35 @@ function isHoliday(date) {
   return holidays(date.getFullYear()).some(h => h.date.toDateString() === date.toDateString());
 }
 
+// Sammenhengende fridager rundt en helligdag: helligdager og helgedager på
+// rad. Inneklemte dager (som fredagen etter Kristi himmelfart) er vanlige
+// arbeidsdager og bryter rekka, som på rodedager.no.
+const addDays = (date, days) => { const d = new Date(date); d.setDate(d.getDate() + days); return d; };
+const isDayOff = d => d.getDay() === 0 || d.getDay() === 6 || isHoliday(d);
+// Avrunding tar høyde for sommertid, der et døgn kan være 23 eller 25 timer.
+const daysBetween = (start, end) => Math.round((end - start) / 86_400_000) + 1;
+
+function daysOffAround(date) {
+  let start = new Date(date), end = new Date(date);
+  while (isDayOff(addDays(start, -1))) start = addDays(start, -1);
+  while (isDayOff(addDays(end, 1))) end = addDays(end, 1);
+  return { start, end, days: daysBetween(start, end) };
+}
+
+// En inneklemt dag er én arbeidsdag med fridager på begge sider, f.eks.
+// fredagen etter Kristi himmelfart. Tar man den fri, smelter fridagene sammen.
+function bridgeDay(stretch) {
+  for (const dir of [1, -1]) {
+    const day = addDays(dir > 0 ? stretch.end : stretch.start, dir);
+    if (isDayOff(day) || !isDayOff(addDays(day, dir))) continue;
+    const other = daysOffAround(addDays(day, dir));
+    const start = dir > 0 ? stretch.start : other.start;
+    const end = dir > 0 ? other.end : stretch.end;
+    return { day, days: daysBetween(start, end) };
+  }
+  return null;
+}
+
 // Første helligdag etter i dag. På selve dagen telles det mot den neste.
 function nextHoliday(now) {
   const year = new Date(now).getFullYear();
@@ -683,7 +712,22 @@ function countdownTarget(now) {
   if (!holiday) return null;
   const d = holiday.date;
   const day = WEEKDAYS[d.getDay()];
-  return { target: d.getTime(), kicker: "Neste røde dag", label: `${holiday.name}, ${day} ${d.getDate()}. ${MONTHS[d.getMonth()]}` };
+  // Fri flere dager på rad fremheves; to dager er bare en vanlig helg.
+  // En inneklemt dag pekes også ut, med hvor mange dager fri den gir.
+  const stretch = daysOffAround(d);
+  // Ordlyden følger rodedager.no: 3–4 dager er en langhelg.
+  const notes = [];
+  const span = `(${WEEKDAYS[stretch.start.getDay()]}–${WEEKDAYS[stretch.end.getDay()]})`;
+  if (stretch.days >= 5) notes.push(`${stretch.days} dager fri på rad ${span}`);
+  else if (stretch.days >= 3) notes.push(`Langhelg: ${stretch.days} dager fri ${span}`);
+  const bridge = bridgeDay(stretch);
+  // En inneklemt dag som allerede er passert, er ikke verdt å nevne.
+  if (bridge && addDays(bridge.day, 1).getTime() > now) {
+    const b = bridge.day;
+    notes.push(`Inneklemt ${WEEKDAYS[b.getDay()]} ${b.getDate()}. ${MONTHS[b.getMonth()]}: ${bridge.days} dager fri med én feriedag`);
+  }
+  // Datoen står i den lille linja over, så navnet får plass på én linje.
+  return { target: d.getTime(), kicker: `Neste røde dag · ${day} ${d.getDate()}. ${MONTHS[d.getMonth()]}`, label: holiday.name, notes };
 }
 
 function renderCountdown(now = Date.now()) {
@@ -697,6 +741,7 @@ function renderCountdown(now = Date.now()) {
   const label = $("cd-label");
   label.textContent = cd.label;
   if (cd.kicker) label.prepend(text("span", "cd-kicker", cd.kicker));
+  for (const note of cd.notes || []) label.append(text("span", "cd-note", note));
   const s = Math.floor(left / 1000);
   const units = [
     [Math.floor(s / 86400), "dager"],
