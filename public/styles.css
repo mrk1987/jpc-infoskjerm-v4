@@ -76,16 +76,35 @@ ol, ul { list-style: none; }
   pointer-events: none;
   z-index: 0;
 }
-/* Rimet (også fra ambient.js) ligger foran panelene, men under vinduene. */
+/* Rimet (frost.js) ligger over værbakgrunnen, men bak panelene og teksten,
+   så klokka, logoen og nyhetene alltid står lesbart oppå det. Det kommer
+   etter .ambient i DOM-en og havner derfor over det med samme z-index. */
 .frost {
   position: absolute;
   inset: 0;
   width: 1080px;
   height: 1920px;
   pointer-events: none;
-  z-index: 40;
+  z-index: 0;
 }
 .screen > :not(.ambient):not(.frost):not(.xp) { position: relative; z-index: 1; }
+
+/* Med rim bak teksten får teksten en mørk glorie, så hvite og grå bokstaver
+   skiller seg fra de hvite iskrystallene. Panelene med egen bakgrunn
+   (tavla, lunsj, beskjed) trenger det ikke. */
+.masthead, .weather, .news { transition: text-shadow .8s ease; }
+.wordmark { transition: filter .8s ease; }
+.screen.frosty .masthead,
+.screen.frosty .weather,
+.screen.frosty .news {
+  text-shadow:
+    0 0 3px rgba(6, 11, 20, .95),
+    0 0 10px rgba(6, 11, 20, .9),
+    0 0 22px rgba(6, 11, 20, .75);
+}
+.screen.frosty .wordmark {
+  filter: drop-shadow(0 0 4px rgba(6, 11, 20, .95)) drop-shadow(0 0 14px rgba(6, 11, 20, .8));
+}
 
 /* ---------- Topp ---------- */
 

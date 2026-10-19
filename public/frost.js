@@ -1,22 +1,21 @@
 // JPC Skullerud infoskjerm v4: rim på ruta.
 //
-// I bitende kulde kryper det rim inn fra kantene av skjermen, som på et
-// vindu. Rimet er ekte: frost.webp er laget av et fotografi av rim på en
-// rute (Simon Fairhurst, Unsplash), gjort om til en maske der iskrystallene
-// er dekkende og glasset mellom dem klart (se tools/make_frost.py). Bildet er
-// den nederste stripa av fotoet, der bregnene vokser oppover, altså innover
-// fra rammen; her roteres den så rimet vokser inn fra alle fire kanter.
+// I bitende kulde kryper rimbregner inn fra kantene av skjermen, som på et
+// vindu. frost.webp er en ferdig rimramme i skjermens format, laget med
+// tools/make_frost.py av et bilde av rim mot svart bakgrunn.
 //
-// Hvor langt inn rimet når, styres av en «kulde»-maske: lengst i de nederste
-// hjørnene, kort langs sidene og minst øverst, der logoen og klokka står.
-// Fronten er ujevn og kryper innover i løpet av noen sekunder.
+// Rimet ligger bak panelene og teksten, men foran værbakgrunnen. Da synes det
+// i margene og mellomrommene, og klokka, logoen og nyhetene står alltid
+// lesbart oppå det.
 //
+// Når det blir kaldt nok, vokser rimet fram fra kantene i løpet av noen
+// sekunder med en ujevn front, og glimter svakt når det er ferdig.
 // ambient.js styrer styrken (0–1) via JpcFrost.draw.
 (() => {
   const W = 1080;
   const H = 1920;
   const GROW_S = 8; // sekunder fra klar rute til ferdig rim
-  const MASK_SCALE = 0.25; // masken regnes ut i kvart oppløsning og skaleres opp
+  const MASK_SCALE = 0.25; // vekstmasken regnes ut i kvart oppløsning og skaleres opp
 
   const ambient = document.getElementById("ambient");
   if (!ambient) { window.JpcFrost = { draw() {}, resize() {} }; return; }
@@ -27,48 +26,22 @@
   ambient.after(canvas);
   const ctx = canvas.getContext("2d");
 
+  // Hvite bregner bak hvit og grå tekst gir for lite kontrast. Med klassen
+  // «frosty» på lerretet får teksten en mørk glorie (styles.css) så lenge
+  // det ligger rim.
+  const screen = document.getElementById("screen");
+  const setFrosty = on => screen?.classList.toggle("frosty", on);
+
   // Bildet får samme versjon som skriptet, så Cloudflare-cachen følger deployen.
   const version = new URL(document.currentScript.src, location.href).searchParams.get("v");
-  const band = new Image();
-  band.decoding = "async";
-  band.src = "frost.webp" + (version ? "?v=" + version : "");
+  const frostImage = new Image();
+  frostImage.decoding = "async";
+  frostImage.src = "frost.webp" + (version ? "?v=" + version : "");
 
-  /* ---------- Rimet langs alle fire kanter ---------- */
+  /* ---------- Vekstmasken ---------- */
 
-  // Stripa er 1920 px lang, med rammen nederst og bregnene pekende oppover.
-  // Langs hver kant tegnes den rotert så rammen ligger mot kanten: hele
-  // lengden på sidene, og ulike utsnitt øverst og nederst, så ingen kant
-  // gjentar en annen og det ikke blir skjøter.
-  let frame = null;
-
-  function buildFrame() {
-    const c = document.createElement("canvas");
-    c.width = W;
-    c.height = H;
-    const g = c.getContext("2d");
-    const bh = band.height;
-    // Tegner et utsnitt av stripa langs en kant, med rammen ved y = 0 og
-    // bregnene inn mot positiv y. Kalles etter at koordinatene er rotert.
-    const along = (from, length, depth, mirror = false) => {
-      g.save();
-      if (mirror) { g.translate(length, 0); g.scale(-1, 1); }
-      g.scale(1, -1);
-      g.drawImage(band, from, 0, length, bh, 0, -depth, length, depth);
-      g.restore();
-    };
-    // Bunn: rammen ved y = H.
-    g.save(); g.translate(0, H); g.scale(1, -1); along(420, W, bh); g.restore();
-    // Topp: grunnere, et annet utsnitt.
-    g.save(); along(840, W, bh * 0.6, true); g.restore();
-    // Venstre: rammen ved x = 0.
-    g.save(); g.translate(0, H); g.rotate(-Math.PI / 2); along(0, H, bh * 0.8); g.restore();
-    // Høyre: rammen ved x = W, speilvendt.
-    g.save(); g.translate(W, 0); g.rotate(Math.PI / 2); along(0, H, bh * 0.8, true); g.restore();
-    return c;
-  }
-
-  /* ---------- Kulde-masken ---------- */
-
+  // Rimet avsløres fra kantene og innover. Fronten følger avstanden til
+  // nærmeste kant, gjort ujevn med støy, og når til slutt hele bildet.
   const MW = Math.round(W * MASK_SCALE);
   const MH = Math.round(H * MASK_SCALE);
   const maskCanvas = document.createElement("canvas");
@@ -91,34 +64,24 @@
     return top + (bottom - top) * sy;
   }
 
-  // Hvor langt inn rimet når, og avstanden til nærmeste kant, for hver celle.
-  // Regnes én gang; veksten skalerer bare rekkevidden.
-  const reachOf = new Float32Array(MW * MH);
+  // Når fronten har kommet så langt inn, er hele rammen avslørt.
+  const FULL_REACH = 620;
   const distOf = new Float32Array(MW * MH);
   for (let y = 0; y < MH; y++) {
     for (let x = 0; x < MW; x++) {
       const px = (x + 0.5) / MASK_SCALE, py = (y + 0.5) / MASK_SCALE;
-      // Bare de nederste hjørnene får ekstra rim; de øverste har logo og klokke.
-      const corner = Math.max(
-        Math.max(0, 1 - Math.hypot(px, H - py) / 520),
-        Math.max(0, 1 - Math.hypot(W - px, H - py) / 520),
-      );
-      // Øverste 260 px (logo, klokke, dato) får bare en tynn rimkant.
-      const top = py < 260 ? 0.45 : py < 360 ? 0.45 + 0.55 * ((py - 260) / 100) : 1;
-      const i = y * MW + x;
-      reachOf[i] = (50 + 230 * corner) * top * (0.7 + 0.6 * noise(x / MW, y / MH));
-      // Toppkanten teller dobbelt så langt unna, så det blir lite rim der.
-      distOf[i] = Math.min(px, W - px, H - py, py * 2);
+      const edge = Math.min(px, W - px, py, H - py);
+      // Støyen gjør at noen bregner kommer før andre.
+      distOf[y * MW + x] = edge * (0.75 + 0.5 * noise(x / MW, y / MH));
     }
   }
 
   function updateMask(grow) {
     const d = maskData.data;
-    for (let i = 0; i < reachOf.length; i++) {
-      const r = reachOf[i] * grow;
-      // Fullt rim ytterst, myk overgang ved fronten.
-      const t = r > 0 ? distOf[i] / r : 2;
-      const a = t <= 0.7 ? 1 : t >= 1 ? 0 : 1 - (t - 0.7) / 0.3;
+    const reach = FULL_REACH * grow;
+    for (let i = 0; i < distOf.length; i++) {
+      // Fullt rim bak fronten, myk overgang de siste 60 pikslene.
+      const a = reach <= 0 ? 0 : Math.min(1, Math.max(0, (reach - distOf[i]) / 60));
       d[i * 4 + 3] = a * 255;
     }
     mctx.putImageData(maskData, 0, 0);
@@ -136,22 +99,23 @@
   let visible = false;
 
   function compose(grow) {
-    if (!frame) frame = buildFrame();
     updateMask(grow);
     cctx.globalCompositeOperation = "source-over";
     cctx.clearRect(0, 0, W, H);
-    cctx.drawImage(frame, 0, 0);
-    cctx.globalCompositeOperation = "destination-in";
-    cctx.imageSmoothingEnabled = true;
-    cctx.drawImage(maskCanvas, 0, 0, W, H);
-    cctx.globalCompositeOperation = "source-over";
+    cctx.drawImage(frostImage, 0, 0, W, H);
+    if (grow < 1) {
+      cctx.globalCompositeOperation = "destination-in";
+      cctx.imageSmoothingEnabled = true;
+      cctx.drawImage(maskCanvas, 0, 0, W, H);
+      cctx.globalCompositeOperation = "source-over";
+    }
   }
 
   // Glimtene plasseres der rimet er tettest når det er ferdig grodd.
   function placeSparkles() {
     const data = cctx.getImageData(0, 0, W, H).data;
     sparkles = [];
-    for (let tries = 0; tries < 4000 && sparkles.length < 90; tries++) {
+    for (let tries = 0; tries < 6000 && sparkles.length < 90; tries++) {
       const x = Math.floor(Math.random() * W), y = Math.floor(Math.random() * H);
       if (data[(y * W + x) * 4 + 3] > 200) {
         sparkles.push({ x, y, r: 0.8 + Math.random() * 1.2, phase: Math.random() * 6.28, speed: 0.6 + Math.random() * 1.6 });
@@ -163,10 +127,11 @@
     // Kalles for hver tegning fra ambient.js med styrken på rimet.
     // instant: hopper over veksten (redusert bevegelse).
     draw(t, k, instant = false) {
-      if (k <= 0 || !band.complete || !band.naturalWidth) {
+      if (k <= 0 || !frostImage.complete || !frostImage.naturalWidth) {
         if (visible) {
           ctx.clearRect(0, 0, W, H);
           visible = false;
+          setFrosty(false);
           // Neste kalde dag kryper rimet fram på nytt.
           grownAt = -1;
           lastGrow = -1;
@@ -181,12 +146,14 @@
         if (grow === 1) placeSparkles();
         lastGrow = grow;
       }
+      setFrosty(k > 0.05);
       ctx.clearRect(0, 0, W, H);
-      ctx.globalAlpha = 0.72 * k;
+      // Dempet: rimet skal være en svak ramme, ikke konkurrere med innholdet.
+      ctx.globalAlpha = 0.42 * k;
       ctx.drawImage(composed, 0, 0);
       ctx.fillStyle = "#ffffff";
       for (const s of sparkles) {
-        ctx.globalAlpha = k * Math.max(0, Math.sin(t * s.speed + s.phase)) * 0.9;
+        ctx.globalAlpha = k * Math.max(0, Math.sin(t * s.speed + s.phase)) * 0.6;
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
         ctx.fill();

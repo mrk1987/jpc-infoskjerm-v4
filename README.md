@@ -75,7 +75,7 @@ Bak panelene går en dempet animasjon som speiler været ute (`public/ambient.js
 | Sludd | Regn og snø blandet |
 | Snø | Snøfnugg som vugger ned |
 | Torden | Kraftig regn og et sjeldent, svakt lysglimt |
-| Bitende kulde | Rim på ruta: iskrystaller kryper inn fra kantene og glimter svakt. Tettest i de nederste hjørnene, bare en tynn kant ved logo og klokke. Ligger foran panelene, som rim på glass. |
+| Bitende kulde | Rim på ruta: en ramme av rimbregner kryper inn fra kantene og glimter svakt. Dempet og bak teksten, så alt er lett å lese. |
 | Vind uten nedbør (fra 8 m/s, eller kast fra ~13 m/s) | Blader som tumler forbi fra høyre mot venstre, og små virvler som snurrer og tones ut. Bladene følger årstiden: høstfarger sep–nov, grønne blader om sommeren, grønt med lyse blomsterblader om våren, og fint fokksnø i stedet for blader om vinteren. |
 | Vind med regn, snø eller sludd | Ingen egne vindeffekter; nedbøren legger seg på skrå fra høyre mot venstre, mer jo sterkere det blåser: rett ned i stille vær, ~30° i frisk bris, ~50° i kuling, ~70° i sterk kuling og nesten vannrett i storm. Kompassretningen brukes ikke. |
 
@@ -104,13 +104,13 @@ stillbilde i stedet for animasjon.
 `&aarstid=vår|sommer|høst|vinter` viser bladene for en annen årstid, f.eks.
 `?vaer=vind&aarstid=vinter` for fokksnø.
 
-**Rimet er et ekte foto.** `public/frost.webp` er laget av et fotografi av rim på en rute av
-[Simon Fairhurst på Unsplash](https://unsplash.com/photos/frozen-patterns-on-a-light-blue-background-qwFlzoUQsC4)
-(Unsplash-lisensen). `tools/make_frost.py` gjør fotoet om til en isblå maske der krystallene
-er dekkende og glasset mellom dem klart, og `public/frost.js` legger den langs alle fire kanter.
-Generert rim (forgreinede streker, og en fasefelt-simulering av krystallvekst) ble prøvd først og
-så ut som spindelvev eller papp; fotoet ser ut som rim. Forhåndsvis med `?vaer=frost` eller
-`?vaer=frost,snø`.
+**Rimet er et ekte bilde.** `public/frost.webp` er laget av et bilde av en rimramme mot svart
+bakgrunn i 9:16, levert av Andreas 2026-10-19. `tools/make_frost.py` gjør lysstyrken om til
+dekkevne (svart blir klart glass, krystallene is) og farger det isblått. Rimet ligger bak panelene
+og teksten og er dempet til 42 % dekkevne; mens det ligger rim, får teksten en mørk glorie
+(`.frosty` i `styles.css`). Generert rim (forgreinede streker, og en fasefelt-simulering av
+krystallvekst) ble prøvd først og så ut som spindelvev eller papp. Forhåndsvis med `?vaer=frost`
+eller `?vaer=frost,snø`.
 
 ### Kiosk-PC
 
