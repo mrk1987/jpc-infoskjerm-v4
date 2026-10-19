@@ -15,7 +15,7 @@ avgangstavle i LED-stil. Etterfølger av
   hvert sekund fra forventet avgangstid, ikke bare ved hver henting. Forsinkelser og innstilte
   avganger vises i rødt, og avviksmeldinger fra Entur ruller nederst på tavla.
 - **Værgraf for neste 24 timer** med temperatur, nedbør, natt og ikoner hver tredje time.
-- **Nyheter i to kolonner**, NRK til venstre og digi.no til høyre. Hver kolonne viser én sak om gangen med ingress, og resten av plassen fylles med de neste sakene. Kolonnene bytter sak forskjøvet med seks sekunder.
+- **Nyheter i to kolonner**, NRK til venstre og ITavisen til høyre. Hver kolonne viser én sak om gangen med ingress, og resten av plassen fylles med de neste sakene. Kolonnene bytter sak forskjøvet med seks sekunder.
 - **Lunsj bytter til neste arbeidsdag** etter servering, og hopper over helg og helligdager.
 - **Utløpt nedtelling skjules** i stedet for å stå på 00 00 00 00.
 - **Automatisk omlasting** når en ny versjon deployes, og hver natt kl. 04.
@@ -31,7 +31,7 @@ over resten av skjermen:
 | T-bane | 8 avganger i hver retning, de neste 14 bussene (70, 76, 79, FB10 …) med plattform, og alle avvik |
 | Vær | Nå-tilstand, føles som, vind, sol opp/ned, graf for 48 timer og prognose for 7 dager |
 | Lunsj | Hele ukemenyen, med dagens rett uthevet og passerte dager dempet |
-| NRK / digi.no | Valgt sak med bilde og hele teksten, QR-kode til saken, og resten av sakene under (trykk for å bytte) |
+| NRK / ITavisen | Valgt sak med bilde og hele teksten (ITavisen sender hele saken i RSS), QR-kode til saken, og resten av sakene under (trykk for å bytte) |
 
 Vinduet lukkes med krysset, et trykk utenfor eller Esc. **Står det urørt i 3 minutter, lukkes det
 av seg selv**; ringen rundt krysset viser tiden som er igjen, og hver berøring starter den på nytt.
@@ -88,7 +88,7 @@ Kilden kan overstyres med miljøvariablene `CONTENT_REPO` og `CONTENT_BRANCH`.
 |---|---|---|
 | `/api/departures` | Entur GraphQL, Skullerud (NSR:StopPlace:58227), T-bane og buss | 20 sek |
 | `/api/weather` | Open-Meteo, 59.8667, 10.8400, 7 dager | 10 min |
-| `/api/news` | NRK siste nytt og digi.no (RSS), hver strøm for seg | 5 min |
+| `/api/news` | NRK siste nytt og ITavisen (RSS), hver strøm for seg | 5 min |
 | `/api/office` | Meny, avstemning, beskjed og nedtelling fra originalrepoet | 3 min |
 | `/api/version` | Hash av frontend-filene | — |
 | `/healthz` | Helsesjekk for Docker og Coolify | — |

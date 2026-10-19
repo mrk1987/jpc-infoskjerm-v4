@@ -19,8 +19,8 @@ const MONTHS = ["januar", "februar", "mars", "april", "mai", "juni", "juli",
 const state = {
   departures: null,
   weather: null,
-  news: { nrk: [], digi: [] },
-  newsIndex: { nrk: 0, digi: 0 },
+  news: { nrk: [], itavisen: [] },
+  newsIndex: { nrk: 0, itavisen: 0 },
   office: null,
   health: {},
 };
@@ -531,7 +531,7 @@ async function loadOffice() {
 function newsTime(ms) {
   if (!ms) return "";
   const d = new Date(ms);
-  // digi.no-strømmen har også eldre saker; da er klokkeslett alene misvisende.
+  // Strømmene kan ha eldre saker; da er klokkeslett alene misvisende.
   if (d.toDateString() !== new Date().toDateString()) return `${d.getDate()}.${d.getMonth() + 1}.`;
   return pad(d.getHours()) + ":" + pad(d.getMinutes());
 }
@@ -546,7 +546,7 @@ function fitNews() {
   document.querySelectorAll(".news-stage .headline").forEach(fitHeadline);
 }
 
-const FEEDS = ["nrk", "digi"];
+const FEEDS = ["nrk", "itavisen"];
 
 // Køen fyller plassen under overskriften; saker som ikke får plass helt
 // fjernes i stedet for å bli kuttet midt i linja.
@@ -635,8 +635,8 @@ async function loadNews() {
   for (const feed of FEEDS) {
     const first = !state.news[feed]?.length;
     state.news[feed] = body.data[feed]?.items || state.news[feed] || [];
-    // digi bytter første gang etter halvannen periode, se forskyvningen nederst.
-    if (first) showHeadline(feed, feed === "digi" ? NEWS_ROTATION_MS * 1.5 : NEWS_ROTATION_MS);
+    // ITavisen bytter første gang etter halvannen periode, se forskyvningen nederst.
+    if (first) showHeadline(feed, feed === "itavisen" ? NEWS_ROTATION_MS * 1.5 : NEWS_ROTATION_MS);
   }
 }
 
@@ -676,11 +676,11 @@ const PANELS = {
     full: true,
     render: body => renderNewsPanel(body, "nrk"),
   },
-  digi: {
-    source: () => document.querySelector('.news-col[data-feed="digi"]'),
-    title: "digi.no",
+  itavisen: {
+    source: () => document.querySelector('.news-col[data-feed="itavisen"]'),
+    title: "ITavisen",
     full: true,
-    render: body => renderNewsPanel(body, "digi"),
+    render: body => renderNewsPanel(body, "itavisen"),
   },
 };
 
@@ -1027,9 +1027,16 @@ function renderNewsPanel(body, feed) {
   const textCol = el("div", "xp-feature-text");
   textCol.append(text("span", "time", [newsTime(item.published), item.kicker].filter(Boolean).join("  ·  ")));
   textCol.append(text("h3", "", item.title));
-  // NRK sender hele notisen med linjeskift mellom avsnittene.
-  for (const para of (item.summary || "").split(/\n+/).map(s => s.trim()).filter(Boolean)) {
-    textCol.append(text("p", "xp-summary", para));
+  // ITavisen sender hele saken som avsnitt og mellomtitler. NRK sender hele
+  // notisen som ingress, med linjeskift mellom avsnittene.
+  if (item.paragraphs?.length) {
+    for (const para of item.paragraphs) {
+      textCol.append(text(para.heading ? "h4" : "p", para.heading ? "xp-subhead" : "xp-summary", para.text));
+    }
+  } else {
+    for (const para of (item.summary || "").split(/\n+/).map(s => s.trim()).filter(Boolean)) {
+      textCol.append(text("p", "xp-summary", para));
+    }
   }
   const grid = el("div", "xp-feature-body");
   grid.append(textCol);
@@ -1142,7 +1149,7 @@ function tick() {
 
 // Feiler et bilde, stilark eller skript (typisk midt i en utrulling), lastes
 // siden på nytt etter et minutt, høyst tre ganger på rad.
-// Bare egne filer teller. Nyhetsbilder fra NRK og digi.no kan feile uten at
+// Bare egne filer teller. Nyhetsbilder fra NRK og ITavisen kan feile uten at
 // siden skal lastes på nytt.
 function ownAsset(node) {
   if (!(node instanceof HTMLElement) || !/^(IMG|SCRIPT|LINK)$/.test(node.tagName)) return false;
@@ -1187,6 +1194,6 @@ setInterval(checkVersion, REFRESH.version);
 // Kolonnene bytter sak forskjøvet med en halv periode, så ikke alt på
 // skjermen beveger seg samtidig.
 setInterval(() => rotateNews("nrk"), NEWS_ROTATION_MS);
-setTimeout(() => setInterval(() => rotateNews("digi"), NEWS_ROTATION_MS), NEWS_ROTATION_MS / 2);
+setTimeout(() => setInterval(() => rotateNews("itavisen"), NEWS_ROTATION_MS), NEWS_ROTATION_MS / 2);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshAll(); });
 scheduleNightlyReload();

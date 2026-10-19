@@ -22,7 +22,9 @@ const STOP_ID = "NSR:StopPlace:58227";
 const COORDS = { latitude: 59.866685, longitude: 10.840032 };
 const NEWS_FEEDS = {
   nrk: "https://www.nrk.no/nyheter/siste.rss",
-  digi: "https://www.digi.no/?lab_viewport=rss",
+  // digi.no ble byttet ut 2026-10-19: hele sakene ligger bak betalingsmur.
+  // ITavisen er gratis og har hele saken i strømmen.
+  itavisen: "https://itavisen.no/feed/",
 };
 const UA = "jpc-infoskjerm/4 (kontorskjerm Skullerud)";
 
@@ -215,7 +217,7 @@ async function loadWeather() {
   };
 }
 
-/* ---------- Nyheter (NRK og digi.no, RSS) ---------- */
+/* ---------- Nyheter (NRK og ITavisen, RSS) ---------- */
 
 const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
 
@@ -242,21 +244,50 @@ function xmlAttr(block, tag, attr) {
 // Lenker og bilder går rett til nettleseren, så bare https slipper gjennom.
 const httpsOnly = url => (/^https:\/\//i.test(url) ? url : "");
 
-// digi.no-strømmen har 150+ saker i forsideorden; vi sorterer på tid og tar de nyeste.
+// Strømmene er ikke alltid i tidsrekkefølge; vi sorterer på tid og tar de nyeste.
+// Rått innhold i en tagg, med CDATA-innpakningen fjernet men HTML-en urørt.
+function xmlRaw(block, tag) {
+  const match = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i"));
+  return match ? match[1].replace(/^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/, "$1") : "";
+}
+
+// ITavisen legger hele saken i content:encoded. Innebygde tweets, bilder,
+// skript og reklamewidgeter fjernes; igjen blir avsnitt og mellomtitler.
+// En mellomtittel helt til slutt hører til en widget, ikke til saken.
+function articleParagraphs(html) {
+  const cleaned = html.replace(/<(script|style|figure|blockquote|iframe|noscript|form|svg|button|aside)\b[\s\S]*?<\/\1>/gi, "");
+  const paragraphs = [...cleaned.matchAll(/<(p|h2|h3)\b[^>]*>([\s\S]*?)<\/\1>/gi)]
+    .map(([, tag, inner]) => ({ text: decodeXml(inner).replace(/\s+/g, " ").trim(), ...(tag.toLowerCase() !== "p" && { heading: true }) }))
+    .filter(p => p.text);
+  while (paragraphs.at(-1)?.heading) paragraphs.pop();
+  return paragraphs.slice(0, 40);
+}
+
+// Annonsørinnhold er merket med versaler foran kolon, f.eks. «TIDSBEGRENSET:».
+const isAdvert = title => /^\p{Lu}{4,}\s*:/u.test(title) || /\b(annonse|sponset|annonsørinnhold)\b/i.test(title);
+
 async function loadFeed(url) {
   const response = await fetchWithTimeout(url);
   const xml = await response.text();
   const items = [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)]
-    .map(([block]) => ({
-      title: xmlTag(block, "title"),
-      summary: xmlTag(block, "description"),
-      published: Date.parse(xmlTag(block, "pubDate")) || 0,
-      link: httpsOnly(xmlTag(block, "link")),
-      // NRK bruker media:content, digi.no enclosure.
-      image: httpsOnly(xmlAttr(block, "media:content", "url") || xmlAttr(block, "enclosure", "url")),
-      kicker: xmlTag(block, "lab:kicker"),
-    }))
-    .filter(item => item.title)
+    .map(([block]) => {
+      const description = xmlRaw(block, "description");
+      const paragraphs = articleParagraphs(xmlRaw(block, "content:encoded"));
+      const teaser = xmlTag(block, "description");
+      return {
+        title: xmlTag(block, "title"),
+        // ITavisens ingress er ofte bare en halv setning; da brukes første avsnitt.
+        summary: teaser.length < 80 && paragraphs[0] && !paragraphs[0].heading ? paragraphs[0].text : teaser,
+        paragraphs,
+        published: Date.parse(xmlTag(block, "pubDate")) || 0,
+        link: httpsOnly(xmlTag(block, "link")),
+        // NRK bruker media:content; ITavisen har bildet som <img> i ingressen.
+        image: httpsOnly(xmlAttr(block, "media:content", "url") || xmlAttr(block, "enclosure", "url") ||
+          decodeXml(description.match(/<img\b[^>]*\bsrc="([^"]+)"/i)?.[1] || "")),
+        kicker: xmlTag(block, "lab:kicker"),
+      };
+    })
+    .filter(item => item.title && !isAdvert(item.title))
     .sort((a, b) => b.published - a.published)
     .slice(0, 12);
   if (!items.length) throw new Error("Tom RSS-strøm");
