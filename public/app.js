@@ -27,11 +27,12 @@ const state = {
 
 /* ---------- Skalering av lerretet ---------- */
 
-// Lerretet fyller hele skjermen uansett format. Innholdet skaleres etter
-// bredden (1080 px), og høyden følger skjermen: en høyere skjerm gir mer
-// plass til nyhetene, som strekker seg i den ledige høyden. Er skjermen så
-// bred at høyden ville blitt under 1600 px, skaleres det etter høyden i
-// stedet og oppsettet blir bredere. Skjermer på 9:16 får nøyaktig 1080 × 1920.
+// Lerretet fyller hele skjermens høyde uansett format. Innholdet skaleres
+// etter bredden (1080 px), og høyden følger skjermen: en høyere skjerm gir
+// mer plass til nyhetene, som strekker seg i den ledige høyden. Bredden
+// strekkes aldri: er skjermen så bred at høyden ville blitt under 1600 px,
+// skaleres det etter høyden og lerretet står midt på med mørk bakgrunn på
+// sidene. Skjermer på 9:16 får nøyaktig 1080 × 1920.
 const BASE_W = 1080;
 const MIN_H = 1600;
 let currentScale = 1;
@@ -40,7 +41,7 @@ let screenH = 1920;
 
 function fitScreen() {
   const scale = Math.min(window.innerWidth / BASE_W, window.innerHeight / MIN_H);
-  screenW = window.innerWidth / scale;
+  screenW = BASE_W;
   screenH = window.innerHeight / scale;
   const screen = $("screen");
   screen.style.width = screenW + "px";

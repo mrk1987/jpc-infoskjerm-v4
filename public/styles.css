@@ -1,7 +1,7 @@
 /* JPC Skullerud infoskjerm v4
-   Lerretet er 1080 px bredt og skaleres til skjermen. Høyden (og ved brede
-   skjermer bredden) settes i app.js (fitScreen) så lerretet fyller hele
-   skjermen uansett format; 1080 × 1920 under er bare startverdien. */
+   Lerretet er alltid 1080 px bredt og skaleres til skjermen. Høyden settes i
+   app.js (fitScreen) så lerretet fyller hele skjermens høyde uansett format;
+   1920 under er bare startverdien. */
 
 :root {
   --night: #0a1220;
