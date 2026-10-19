@@ -74,11 +74,12 @@ ol, ul { list-style: none; }
 }
 
 .brand { display: flex; flex-direction: column; gap: 4px; }
+/* Offisiell JPC-logo, negativ versjon (konvertert fra JPC-logo.eps). */
 .wordmark {
-  font-size: 60px;
-  font-weight: 800;
-  letter-spacing: -.02em;
-  line-height: .9;
+  display: block;
+  height: 50px;
+  width: auto;
+  margin-bottom: 8px;
 }
 .place {
   font-size: 25px;
