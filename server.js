@@ -845,7 +845,7 @@ function send(res, status, body, headers = {}) {
   res.end(body);
 }
 
-async function serveStatic(pathname, res) {
+async function serveStatic(pathname, res, requestedVersion) {
   const rel = normalize(pathname === "/" ? "/index.html" : pathname).replace(/^([/\\])+/, "");
   if (rel.startsWith("..")) return send(res, 400, "Ugyldig sti");
   try {
@@ -858,7 +858,14 @@ async function serveStatic(pathname, res) {
     if (isHtml) {
       body = body.toString("utf8").replace(/(href|src)="([\w-]+\.(?:css|js|svg))"/g, `$1="$2?v=${VERSION}"`);
     }
-    const cacheControl = isHtml ? "no-cache" : "public, max-age=31536000, immutable";
+    // «immutable» bare når ?v= er akkurat denne serverens versjon. Under en
+    // rullerende oppdatering kan den gamle containeren få spørsmål om den nye
+    // versjonens URL. Den svarer da med sin gamle fil, og uten denne sjekken
+    // cachet Cloudflare den i fire timer under den nye adressen (skjedde med
+    // ambient.js 2026-10-19). Ved avvik sendes filen, men uten cache.
+    const cacheControl = isHtml ? "no-cache"
+      : requestedVersion === VERSION ? "public, max-age=31536000, immutable"
+      : "no-store";
     send(res, 200, body, { "Content-Type": type, "Cache-Control": cacheControl });
   } catch {
     // no-store: under en rullerende oppdatering kan den gamle containeren få
@@ -869,7 +876,7 @@ async function serveStatic(pathname, res) {
 }
 
 createServer(async (req, res) => {
-  const { pathname } = new URL(req.url, "http://localhost");
+  const { pathname, searchParams } = new URL(req.url, "http://localhost");
   if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "");
 
   if (pathname === "/api/radar") {
@@ -885,7 +892,7 @@ createServer(async (req, res) => {
   }
 
   const route = ROUTES[pathname];
-  if (!route) return serveStatic(pathname, res);
+  if (!route) return serveStatic(pathname, res, searchParams.get("v"));
 
   try {
     const body = JSON.stringify(await route());
