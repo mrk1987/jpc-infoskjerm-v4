@@ -77,13 +77,27 @@ Bak panelene går en dempet animasjon som speiler været ute (`public/ambient.js
 | Torden | Kraftig regn og et sjeldent, svakt lysglimt |
 | Vind (fra 8 m/s, eller kast fra ~13 m/s) | Vindstriper på tvers, i kombinasjon med alt over. Regnet faller skrått og snøen driver i vindens faktiske retning. |
 
-Er det regn på radaren akkurat nå, vises regn selv om timesymbolet sier skyet. Lynet holder seg
-godt under grensene for blinkende lys som kan utløse anfall, og med «redusert bevegelse» slått på
-i operativsystemet vises et stillbilde i stedet for animasjon.
+**Alt styres av Yrs tall for Skullerud, ikke av faste nivåer:**
+
+| Lag | Kilde | Eksempel |
+|---|---|---|
+| Regn, snø, sludd | Radarens mm/t akkurat nå (Nowcast). Viser radaren ingenting, brukes Yrs prognose for neste time. Typen kommer fra værsymbolet, eller temperaturen hvis bare radaren ser nedbør. | 0,5 mm/t gir noen få, korte dråper; 10 mm/t eller mer gir ~600 lange, raske striper. Snø teller 2,5 ganger så mye, fordi 1 mm/t snø allerede er kraftig snøvær. |
+| Skyer | Yrs skydekke i prosent | 28 % gir noen svake skyer, 100 % tett, mørkt skydekke |
+| Sol, stjerner | Det som er igjen av himmelen når skyer og tåke er trukket fra | 60 % skydekke gir sol med 40 % styrke |
+| Tåke | Yrs tåkedekke i prosent | |
+| Torden | Yrs sannsynlighet for torden neste time | 100 % gir et svakt lysglimt hvert 14.–40. sekund, 20 % omtrent hvert eller annet minutt |
+| Vind | Yrs middelvind og vindkast, i vindens faktiske retning | Fra 8 m/s (eller kast fra ~13 m/s), full styrke ved 16 m/s |
+
+Styrken går fra 0 til 1 på en logaritmisk skala, så yr, jevnt regn og styrtregn ser tydelig
+forskjellige ut. Endres været, glir lagene over til den nye styrken i løpet av noen sekunder: regnet
+tiltar eller stilner i stedet for at bildet hopper. Lynet holder seg godt under grensene for
+blinkende lys som kan utløse anfall, og med «redusert bevegelse» slått på i operativsystemet vises et
+stillbilde i stedet for animasjon.
 
 **Forhåndsvisning:** legg til `?vaer=` i adressen for å se et vær uten å vente på det, f.eks.
 `https://infoskjerm.kokkinos.no/?vaer=snø,vind`. Lag: `sol`, `natt`, `skyer`, `tåke`, `regn`,
-`sludd`, `snø`, `torden`, `vind`, kommaseparert.
+`sludd`, `snø`, `torden`, `vind`, kommaseparert. Styrke angis med kolon fra 0 til 1:
+`?vaer=regn:1,vind:0.6` er styrtregn i kuling, `?vaer=regn:0.15` er yr.
 
 ### Kiosk-PC
 

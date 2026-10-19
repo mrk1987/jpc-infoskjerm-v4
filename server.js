@@ -366,6 +366,10 @@ async function loadWeather() {
       gust: details.wind_speed_of_gust ?? null,
       // Retningen vinden kommer fra, i grader. Værbakgrunnen blåser motsatt vei.
       windDir: details.wind_from_direction ?? null,
+      // Skydekke, tåke og tordensannsynlighet i prosent, som styrer værbakgrunnen.
+      cloud: details.cloud_area_fraction ?? null,
+      fog: details.fog_area_fraction ?? null,
+      thunder: fcFirst.next_1_hours?.details?.probability_of_thunder ?? null,
       rain: nowFirst?.next_1_hours?.details?.precipitation_amount ?? fcFirst.next_1_hours?.details?.precipitation_amount ?? 0,
       day: isDaylight(Date.now()),
     },

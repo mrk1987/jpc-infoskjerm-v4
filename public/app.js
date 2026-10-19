@@ -269,43 +269,78 @@ function renderWeather() {
 
 /* ---------- Værbakgrunn ---------- */
 
-// Oversetter været nå til lagene i ambient.js, med styrke 0–1.
+// Nedbørsintensitet i mm/t gjort om til styrke 0–1 på en logaritmisk skala,
+// så yr, jevnt regn og styrtregn ser tydelig forskjellige ut:
+// 0,5 mm/t ≈ 0,16, 1 ≈ 0,27, 2,5 ≈ 0,5, 5 ≈ 0,7, 10 mm/t eller mer ≈ 1.
+// Snø måles i vannmengde, og 1 mm/t er allerede kraftig snøvær, så den
+// teller 2,5 ganger så mye.
+function precipLevel(mmPerHour, snow = false) {
+  const x = snow ? mmPerHour * 2.5 : mmPerHour;
+  return clampNum(Math.log2(1 + x) / Math.log2(13), 0.12, 1);
+}
+
+function clampNum(v, lo, hi) {
+  return Math.min(hi, Math.max(lo, v));
+}
+
+// Hvilken nedbør værsymbolet sier det er. Mengden kommer fra tallene.
+function precipKind(code) {
+  if (code >= 95) return "rain";
+  if (code === 66 || code === 67) return "sleet";
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "snow";
+  if (code >= 51) return "rain";
+  return null;
+}
+
+// Reserve for eldre svar uten skydekke: omtrentlig dekke ut fra symbolet.
+const SYMBOL_CLOUD = { 0: 0, 1: 25, 2: 55, 3: 95, 45: 100, 48: 100 };
+
+// Oversetter Yrs tall for akkurat nå til lagene i ambient.js, med styrke 0–1.
+// Alt bygger på MET-dataene, ikke på faste nivåer:
+// - nedbør: radarens mm/t akkurat nå (Nowcast). Viser radaren ingenting
+//   over Skullerud, brukes Yrs prognose for neste time.
+// - skyer, tåke: Yrs skydekke og tåkedekke i prosent.
+// - sol og stjerner: det som er igjen av himmelen når skyer og tåke er trukket fra.
+// - torden: Yrs sannsynlighet for torden neste time.
+// - vind: Yrs middelvind, vindkast og vindretning.
 function ambientFor({ current, nowcast }) {
   const code = current.code;
   const layers = {};
-  const sky = current.day ? "sun" : "stars";
-  if (code <= 1) {
-    layers[sky] = 1;
-    if (code === 1) layers.clouds = 0.3;
-  } else if (code === 2) {
-    layers[sky] = 0.6;
-    layers.clouds = 0.6;
-  } else if (code === 3) {
-    layers.clouds = 1;
-  } else if (code === 45 || code === 48) {
-    layers.fog = 1;
-  } else if (code >= 95) {
-    Object.assign(layers, { rain: 1, lightning: 1, clouds: 1 });
-  } else if (code === 66 || code === 67) {
-    Object.assign(layers, { rain: 0.5, snow: 0.5, clouds: 0.8 });
-  } else if ((code >= 71 && code <= 77) || code === 85 || code === 86) {
-    layers.snow = { 71: 0.4, 73: 0.7, 75: 1, 77: 0.4, 85: 0.6, 86: 1 }[code];
-    layers.clouds = 0.7;
-  } else if (code >= 51) {
-    layers.rain = { 51: 0.3, 53: 0.4, 55: 0.5, 61: 0.4, 63: 0.7, 65: 1, 80: 0.5, 81: 0.75, 82: 1 }[code] ?? 0.6;
-    layers.clouds = 0.8;
+  const cloud = (current.cloud ?? SYMBOL_CLOUD[code] ?? 90) / 100;
+  const fog = (current.fog ?? (code === 45 || code === 48 ? 100 : 0)) / 100;
+
+  const radarRate = nowcast?.radar !== false ? nowcast?.points?.[0]?.rate ?? 0 : 0;
+  const rate = radarRate >= 0.1 ? radarRate : current.rain ?? 0;
+  let kind = precipKind(code);
+  // Nedbør i tallene uten nedbør i symbolet: temperaturen avgjør typen.
+  if (!kind && rate >= 0.1) kind = current.temp <= 0.5 ? "snow" : current.temp <= 1.5 ? "sleet" : "rain";
+  if (kind) {
+    // Symbolet sier nedbør, men mengden er under 0,1 mm: svakeste nivå.
+    const k = rate >= 0.05 ? precipLevel(rate, kind === "snow") : 0.12;
+    if (kind === "sleet") {
+      layers.rain = k * 0.6;
+      layers.snow = k * 0.6;
+    } else {
+      layers[kind] = k;
+    }
   }
 
-  // Radaren vet bedre enn timesymbolet hva som faller akkurat nå.
-  const rate = nowcast?.points?.[0]?.rate ?? 0;
-  if (rate >= 0.1 && !layers.rain && !layers.snow) {
-    layers[current.temp <= 0.5 ? "snow" : "rain"] = Math.min(1, 0.3 + rate / 4);
-    layers.clouds = Math.max(layers.clouds || 0, 0.8);
-  }
+  // Yr regner tåke med i skydekket. Skyene tynnes ut så tåken ikke dobles.
+  const clouds = cloud * (1 - fog * 0.7);
+  if (clouds >= 0.05) layers.clouds = clouds;
+  if (fog >= 0.1) layers.fog = fog;
+  const sky = (1 - cloud) * (1 - fog);
+  if (sky >= 0.08) layers[current.day ? "sun" : "stars"] = sky;
+
+  // Lynet blinker oftere jo mer sannsynlig torden er. Yrs egen sannsynlighet
+  // gjelder; 60 % brukes bare når et tordensymbol mangler tallet.
+  const thunder = (current.thunder ?? (code >= 95 ? 60 : 0)) / 100;
+  if (thunder >= 0.2) layers.lightning = thunder;
 
   // Vindkast teller litt, så en byget dag med rolig middelvind også synes.
+  // 8 m/s gir svak vind på skjermen, 16 m/s eller mer full styrke.
   const windy = Math.max(current.wind, (current.gust ?? 0) * 0.6);
-  if (windy >= 8) layers.wind = Math.min(1, (windy - 6) / 8);
+  if (windy >= 8) layers.wind = clampNum((windy - 6) / 10, 0.2, 1);
 
   // windDir er retningen vinden kommer fra; den blåser motsatt vei.
   // 10 m/s gir omtrent 140 px/s sideveis på lerretet.
@@ -319,20 +354,37 @@ function ambientFor({ current, nowcast }) {
 }
 
 // Forhåndsvisning uten å vente på riktig vær: ?vaer=snø,vind
-// Lag: sol, natt, skyer, tåke, regn, sludd, snø, torden, vind.
+// Lag: sol, natt, skyer, tåke, regn, sludd, snø, torden, vind. Styrke kan
+// angis med kolon, fra 0 til 1: ?vaer=regn:1,vind:0.4 er styrtregn med
+// moderat vind, ?vaer=regn:0.15 er yr.
 const AMBIENT_PREVIEW = (() => {
   const wanted = new URLSearchParams(location.search).get("vaer");
   if (!wanted) return null;
   const presets = {
-    sol: { sun: 1 }, natt: { stars: 1 }, skyer: { clouds: 1 }, "tåke": { fog: 1 },
-    regn: { rain: 0.8, clouds: 0.8 }, sludd: { rain: 0.5, snow: 0.5, clouds: 0.8 },
-    "snø": { snow: 0.8, clouds: 0.7 }, torden: { rain: 1, lightning: 1, clouds: 1 }, vind: { wind: 1 },
+    sol: k => ({ sun: k }),
+    natt: k => ({ stars: k }),
+    skyer: k => ({ clouds: k }),
+    "tåke": k => ({ fog: k }),
+    regn: k => ({ rain: k, clouds: Math.max(0.6, k) }),
+    sludd: k => ({ rain: k * 0.6, snow: k * 0.6, clouds: Math.max(0.6, k) }),
+    "snø": k => ({ snow: k, clouds: Math.max(0.6, k) }),
+    torden: k => ({ rain: k, lightning: 1, clouds: 1 }),
+    vind: k => ({ wind: k }),
   };
+  const defaults = { regn: 0.6, sludd: 0.6, "snø": 0.6, torden: 0.9, vind: 0.7 };
   const layers = {};
-  for (const name of wanted.toLowerCase().split(",")) Object.assign(layers, presets[name.trim()]);
+  let windStrength = 0;
+  for (const part of wanted.toLowerCase().split(",")) {
+    const [name, value] = part.trim().split(":");
+    if (!presets[name]) continue;
+    const k = value === undefined ? defaults[name] ?? 1 : clampNum(Number(value) || 0, 0, 1);
+    if (name === "vind") windStrength = k;
+    for (const [layer, v] of Object.entries(presets[name](k))) layers[layer] = Math.max(layers[layer] || 0, v);
+  }
   return {
     layers,
-    windX: layers.wind ? 160 : 0,
+    // Samme regel som ekte vind: styrke 1 tilsvarer 16 m/s.
+    windX: Math.round((6 + windStrength * 10) * 14 * (windStrength ? 1 : 0)),
     dark: Boolean(layers.rain || layers.snow || layers.lightning),
     night: Boolean(layers.stars),
   };

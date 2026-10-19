@@ -4,24 +4,43 @@
 // skyer, tåke, regn, sludd, snø, torden og vind. app.js bestemmer hvilke lag
 // som er på og hvor sterke de er (0 til 1); her tegnes alt på ett lerret.
 // Alt holdes dempet, så teksten foran alltid er lett å lese.
+//
+// Styrken styrer både hvor mange partikler det er og hvordan de ser ut:
+// yr er få, korte og tynne dråper, styrtregn er hundrevis av lange, raske
+// striper. Endres styrken, glir lagene mot den nye verdien over noen
+// sekunder; nye partikler kommer inn ovenfra, og overflødige forsvinner når
+// de har falt ut av skjermen. Da ser det ut som om regnet tiltar eller
+// stilner, i stedet for at bildet hopper.
 (() => {
   const W = 1080;
   const H = 1920;
   const TAU = Math.PI * 2;
+  const EASE_S = 4; // tidskonstant for overgangen mellom styrker
   const canvas = document.getElementById("ambient");
   if (!canvas?.getContext) return;
   const ctx = canvas.getContext("2d");
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const rand = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const LAYERS = ["sun", "stars", "clouds", "fog", "rain", "snow", "lightning", "wind"];
 
-  let scene = { layers: {}, windX: 0, dark: false, night: false };
+  let target = { layers: {}, windX: 0, dark: false, night: false };
+  const level = Object.fromEntries(LAYERS.map(l => [l, 0])); // styrken som vises nå
+  let windX = 0;
   let sceneKey = "";
-  let pools = { stars: [], clouds: [], fog: [], rain: [], snow: [], gusts: [] };
-  let slant = 0;
+  let started = false;
+  let cloudTint = "";
+  const pools = { stars: [], clouds: [], fog: [], rain: [], snow: [], gusts: [] };
   let frame = 0;
   let last = 0;
   const flash = { level: 0, next: 0, second: 0 };
+
+  // Hvor mange partikler hvert lag skal ha ved en gitt styrke.
+  const want = {
+    rain: k => (k < 0.02 ? 0 : Math.round(30 + 570 * Math.pow(k, 1.2))),
+    snow: k => (k < 0.02 ? 0 : Math.round(30 + 470 * k)),
+    gusts: k => (k < 0.02 ? 0 : Math.round(3 + 15 * k)),
+  };
 
   /* ---------- Sprites: skyer og tåke tegnes uskarpe én gang ---------- */
 
@@ -46,68 +65,74 @@
     return sprite(760, 340, color, blobs, 26);
   }
 
+  // Ni skyer lages alltid; styrken bestemmer hvor mange som vises og hvor tett.
+  function buildClouds() {
+    cloudTint = target.dark ? "#7d8aa0" : "#dfe8f5";
+    const sprites = [cloudSprite(cloudTint), cloudSprite(cloudTint), cloudSprite(cloudTint)];
+    pools.clouds = Array.from({ length: 9 }, (_, i) => ({
+      img: sprites[i % 3], x: rand(-500, W), y: rand(-100, H * 0.78), s: rand(0.7, 1.5), v: rand(6, 16), a: rand(0.5, 1),
+    }));
+  }
+
+  function buildStatic() {
+    pools.stars = Array.from({ length: 110 }, () => ({
+      // Stjernene samles øverst, der himmelen ville vært.
+      x: rand(0, W), y: H * 0.7 * Math.pow(Math.random(), 1.6), r: rand(0.6, 1.8), phase: rand(0, TAU), speed: rand(0.4, 1.4),
+    }));
+    const fog = sprite(1800, 320, "#c3cedd", [[0.5, 0.5, 0.42, 0.26]], 40);
+    pools.fog = Array.from({ length: 6 }, (_, i) => ({
+      img: fog, x: rand(W - 1800, 0), y: (H / 6) * i + rand(-40, 80), v: rand(6, 14) * (Math.random() < 0.5 ? -1 : 1), a: rand(0.6, 1), phase: rand(0, TAU),
+    }));
+    buildClouds();
+  }
+
   /* ---------- Partikler ---------- */
 
-  // Regn faller skrått med vinden, så dråpene må starte litt på lovsiden.
-  const drop = anywhere => ({
-    x: rand(-200 - Math.max(0, slant) * H, W + 200 - Math.min(0, slant) * H),
-    y: anywhere ? rand(-0.1 * H, H) : rand(-160, -20),
-    len: rand(18, 34),
-    v: rand(950, 1400),
-  });
+  const slant = () => clamp(windX / 700, -0.45, 0.45);
 
-  const flake = anywhere => ({
-    x: rand(-100, W + 100),
-    y: anywhere ? rand(0, H) : rand(-40, -8),
-    r: rand(1.4, 4),
-    v: rand(35, 95),
-    phase: rand(0, TAU),
-    sway: rand(12, 34),
-  });
+  // Dråpens størrelse og fart følger styrken da den ble født, så kraftig
+  // regn gradvis får lengre og raskere striper etter hvert som dråpene byttes.
+  function drop(anywhere) {
+    const k = level.rain;
+    const s = slant();
+    return {
+      x: rand(-200 - Math.max(0, s) * H, W + 200 - Math.min(0, s) * H),
+      y: anywhere ? rand(-0.1 * H, H) : rand(-200, -20),
+      len: rand(10, 18) + 26 * k * Math.random() + 10 * k,
+      v: rand(800, 1000) + 700 * k * Math.random(),
+    };
+  }
+
+  function flake(anywhere) {
+    const k = level.snow;
+    return {
+      x: rand(-100, W + 100),
+      y: anywhere ? rand(0, H) : rand(-40, -8),
+      r: rand(1.2, 2.4) + 2.6 * k * Math.random(),
+      v: rand(30, 70) + 50 * k * Math.random(),
+      phase: rand(0, TAU),
+      sway: rand(12, 34),
+    };
+  }
 
   function gust(anywhere) {
-    const len = rand(240, 480);
-    const right = scene.windX >= 0;
+    const k = level.wind;
+    const len = rand(220, 360) + 220 * k;
+    const right = windX >= 0;
     return {
       len,
       x: anywhere ? rand(-len, W) : right ? -len - rand(50, 700) : W + rand(50, 700),
       y: rand(80, H - 80),
-      v: rand(520, 900),
-      amp: rand(6, 18),
+      v: rand(420, 650) + 500 * k,
+      amp: rand(6, 14) + 10 * k,
       phase: rand(0, TAU),
     };
   }
 
-  function build() {
-    const L = scene.layers;
-    slant = clamp(scene.windX / 700, -0.45, 0.45);
-    const tint = scene.dark ? "#7d8aa0" : "#dfe8f5";
-    const clouds = [];
-    if (L.clouds) {
-      const sprites = [cloudSprite(tint), cloudSprite(tint), cloudSprite(tint)];
-      const count = Math.round(3 + L.clouds * 6);
-      for (let i = 0; i < count; i++) {
-        clouds.push({ img: sprites[i % 3], x: rand(-500, W), y: rand(-100, H * 0.78), s: rand(0.7, 1.5), v: rand(6, 16), a: rand(0.5, 1) });
-      }
-    }
-    const fog = [];
-    if (L.fog) {
-      const img = sprite(1800, 320, "#c3cedd", [[0.5, 0.5, 0.42, 0.26]], 40);
-      for (let i = 0; i < 6; i++) {
-        fog.push({ img, x: rand(W - 1800, 0), y: (H / 6) * i + rand(-40, 80), v: rand(6, 14) * (Math.random() < 0.5 ? -1 : 1), a: rand(0.6, 1), phase: rand(0, TAU) });
-      }
-    }
-    pools = {
-      // Stjernene samles øverst, der himmelen ville vært.
-      stars: L.stars ? Array.from({ length: 110 }, () => ({
-        x: rand(0, W), y: H * 0.7 * Math.pow(Math.random(), 1.6), r: rand(0.6, 1.8), phase: rand(0, TAU), speed: rand(0.4, 1.4),
-      })) : [],
-      clouds,
-      fog,
-      rain: L.rain ? Array.from({ length: Math.round(60 + L.rain * 260) }, () => drop(true)) : [],
-      snow: L.snow ? Array.from({ length: Math.round(50 + L.snow * 190) }, () => flake(true)) : [],
-      gusts: L.wind ? Array.from({ length: Math.round(4 + L.wind * 10) }, () => gust(true)) : [],
-    };
+  // Fyller på nye partikler ovenfra til laget har så mange det skal ha.
+  // Overflødige fjernes først når de har forlatt skjermen (se oppdateringene).
+  function topUp(pool, count, make) {
+    while (pool.length < count) pool.push(make(!started));
   }
 
   /* ---------- Tegning ---------- */
@@ -171,40 +196,56 @@
   }
 
   function drawClouds(dt, k) {
-    const dim = scene.night ? 0.6 : 1;
-    for (const c of pools.clouds) {
+    const dim = target.night ? 0.6 : 1;
+    const visible = Math.round(3 + 6 * k);
+    pools.clouds.forEach((c, i) => {
       const w = c.img.width * c.s;
-      c.x += (c.v + scene.windX * 0.25) * dt;
+      c.x += (c.v + windX * 0.25) * dt;
       if (c.x > W + 40) c.x = -w - 40;
       if (c.x < -w - 60) c.x = W + 20;
+      if (i >= visible) return;
       ctx.globalAlpha = 0.22 * c.a * k * dim;
       ctx.drawImage(c.img, c.x, c.y, w, c.img.height * c.s);
-    }
+    });
     ctx.globalAlpha = 1;
   }
 
-  function drawRain(dt) {
-    ctx.strokeStyle = "rgba(170, 200, 240, .3)";
-    ctx.lineWidth = 1.5;
+  function drawRain(dt, k) {
+    const s = slant();
+    const count = want.rain(k);
+    topUp(pools.rain, count, drop);
+    // Kraftig regn er både tettere, tykkere og litt lysere.
+    ctx.strokeStyle = `rgba(170, 200, 240, ${0.22 + 0.16 * k})`;
+    ctx.lineWidth = 1.1 + 1.1 * k;
     ctx.lineCap = "round";
     ctx.beginPath();
-    for (const d of pools.rain) {
+    for (let i = pools.rain.length - 1; i >= 0; i--) {
+      const d = pools.rain[i];
       d.y += d.v * dt;
-      d.x += d.v * slant * dt;
-      if (d.y > H + 40) Object.assign(d, drop(false));
+      d.x += d.v * s * dt;
+      if (d.y > H + 40) {
+        if (pools.rain.length > count) { pools.rain.splice(i, 1); continue; }
+        Object.assign(d, drop(false));
+      }
       ctx.moveTo(d.x, d.y);
-      ctx.lineTo(d.x - d.len * slant, d.y - d.len);
+      ctx.lineTo(d.x - d.len * s, d.y - d.len);
     }
     ctx.stroke();
   }
 
-  function drawSnow(t, dt) {
-    ctx.fillStyle = "rgba(240, 246, 255, .7)";
+  function drawSnow(t, dt, k) {
+    const count = want.snow(k);
+    topUp(pools.snow, count, flake);
+    ctx.fillStyle = `rgba(240, 246, 255, ${0.6 + 0.2 * k})`;
     ctx.beginPath();
-    for (const f of pools.snow) {
+    for (let i = pools.snow.length - 1; i >= 0; i--) {
+      const f = pools.snow[i];
       f.y += f.v * dt;
-      f.x += (scene.windX * 0.5 + Math.sin(t * 0.9 + f.phase) * f.sway) * dt;
-      if (f.y > H + 10) Object.assign(f, flake(false));
+      f.x += (windX * 0.5 + Math.sin(t * 0.9 + f.phase) * f.sway) * dt;
+      if (f.y > H + 10) {
+        if (pools.snow.length > count) { pools.snow.splice(i, 1); continue; }
+        Object.assign(f, flake(false));
+      }
       if (f.x > W + 120) f.x -= W + 240;
       if (f.x < -120) f.x += W + 240;
       ctx.moveTo(f.x + f.r, f.y);
@@ -214,34 +255,41 @@
   }
 
   function drawGusts(t, dt, k) {
-    const dir = scene.windX >= 0 ? 1 : -1;
-    ctx.strokeStyle = "rgba(225, 235, 250, .13)";
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = k;
-    for (const g of pools.gusts) {
+    const dir = windX >= 0 ? 1 : -1;
+    const count = want.gusts(k);
+    topUp(pools.gusts, count, gust);
+    ctx.strokeStyle = `rgba(225, 235, 250, ${0.09 + 0.08 * k})`;
+    ctx.lineWidth = 1.6 + 1.2 * k;
+    for (let i = pools.gusts.length - 1; i >= 0; i--) {
+      const g = pools.gusts[i];
       g.x += g.v * dir * dt;
-      if ((dir > 0 && g.x > W + 100) || (dir < 0 && g.x + g.len < -100)) Object.assign(g, gust(false));
+      if ((dir > 0 && g.x > W + 100) || (dir < 0 && g.x + g.len < -100)) {
+        if (pools.gusts.length > count) { pools.gusts.splice(i, 1); continue; }
+        Object.assign(g, gust(false));
+      }
       ctx.beginPath();
-      for (let i = 0; i <= 24; i++) {
-        const p = i / 24;
+      for (let j = 0; j <= 24; j++) {
+        const p = j / 24;
         const x = g.x + p * g.len;
         const y = g.y + Math.sin(p * 6 + t * 3 + g.phase) * g.amp * Math.sin(p * Math.PI);
-        if (i) ctx.lineTo(x, y);
+        if (j) ctx.lineTo(x, y);
         else ctx.moveTo(x, y);
       }
       ctx.stroke();
     }
-    ctx.globalAlpha = 1;
   }
 
   // Lynet er et svakt, dobbelt lysglimt med lang pause mellom, godt under
-  // grensene for blinkende lys som kan utløse anfall.
-  function drawLightning(t, dt) {
+  // grensene for blinkende lys som kan utløse anfall. Styrken er Yrs
+  // tordensannsynlighet: ved 100 % kommer et glimt hvert 14.–40. sekund,
+  // ved 20 % omtrent hvert eller annet minutt.
+  function drawLightning(t, dt, k) {
+    const spacing = () => rand(14, 40) / Math.max(0.3, k);
     if (!flash.next) flash.next = t + rand(6, 14);
     if (t >= flash.next) {
       flash.level = 1;
       flash.second = t + 0.14;
-      flash.next = t + rand(14, 40);
+      flash.next = t + spacing();
     }
     if (flash.second && t >= flash.second) {
       flash.level = Math.max(flash.level, 0.7);
@@ -254,46 +302,61 @@
     }
   }
 
+  // Styrkene glir mot målet. Første tegning hopper rett dit.
+  function ease(dt) {
+    const f = started ? 1 - Math.exp(-dt / EASE_S) : 1;
+    for (const l of LAYERS) {
+      const goal = target.layers[l] || 0;
+      level[l] += (goal - level[l]) * f;
+      if (Math.abs(goal - level[l]) < 0.002) level[l] = goal;
+    }
+    windX += (target.windX - windX) * f;
+  }
+
   function draw(t, dt) {
-    const L = scene.layers;
+    ease(dt);
     ctx.clearRect(0, 0, W, H);
-    if (L.sun) drawSun(t, L.sun);
-    if (L.stars) drawStars(t, L.stars);
-    if (L.fog) drawFog(t, dt, L.fog);
-    if (L.clouds) drawClouds(dt, L.clouds);
-    if (L.rain) drawRain(dt);
-    if (L.snow) drawSnow(t, dt);
-    if (L.wind) drawGusts(t, dt, L.wind);
-    if (L.lightning && !reduceMotion) drawLightning(t, dt);
+    if (level.sun) drawSun(t, level.sun);
+    if (level.stars) drawStars(t, level.stars);
+    if (level.fog) drawFog(t, dt, level.fog);
+    if (level.clouds) drawClouds(dt, level.clouds);
+    if (level.rain || pools.rain.length) drawRain(dt, level.rain);
+    if (level.snow || pools.snow.length) drawSnow(t, dt, level.snow);
+    if (level.wind || pools.gusts.length) drawGusts(t, dt, level.wind);
+    if (level.lightning > 0.05 && !reduceMotion) drawLightning(t, dt, level.lightning);
+    started = true;
   }
 
   /* ---------- Styring ---------- */
 
-  const active = () => Object.values(scene.layers).some(v => v > 0);
+  const busy = () =>
+    LAYERS.some(l => level[l] > 0 || (target.layers[l] || 0) > 0) ||
+    pools.rain.length > 0 || pools.snow.length > 0 || pools.gusts.length > 0;
 
   function loop(now) {
     const t = now / 1000;
     const dt = last ? Math.min(0.05, t - last) : 0;
     last = t;
     draw(t, dt);
-    frame = active() ? requestAnimationFrame(loop) : 0;
+    frame = busy() ? requestAnimationFrame(loop) : 0;
+    if (!frame) ctx.clearRect(0, 0, W, H);
   }
 
   function render() {
-    if (!active()) {
-      ctx.clearRect(0, 0, W, H);
-      return;
-    }
     // Med redusert bevegelse vises ett stillbilde i stedet for animasjon.
     if (reduceMotion) {
+      started = false;
+      for (const pool of ["rain", "snow", "gusts"]) pools[pool] = [];
       draw(0, 0);
       return;
     }
-    if (!frame) {
+    if (!frame && busy()) {
       last = 0;
       frame = requestAnimationFrame(loop);
     }
   }
+
+  buildStatic();
 
   window.JpcAmbient = {
     // layers: { sun, stars, clouds, fog, rain, snow, lightning, wind } med styrke 0–1.
@@ -302,8 +365,8 @@
       const key = JSON.stringify(next);
       if (key === sceneKey) return;
       sceneKey = key;
-      scene = { layers: next.layers || {}, windX: next.windX || 0, dark: Boolean(next.dark), night: Boolean(next.night) };
-      build();
+      target = { layers: next.layers || {}, windX: next.windX || 0, dark: Boolean(next.dark), night: Boolean(next.night) };
+      if ((target.dark ? "#7d8aa0" : "#dfe8f5") !== cloudTint) buildClouds();
       render();
     },
     // Lerretet følger skjermens oppløsning, men høyst 1,5× for å spare GPU.
